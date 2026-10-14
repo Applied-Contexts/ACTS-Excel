@@ -2,10 +2,25 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js';
-import { mkdtemp, rm, writeFile, readFile } from 'node:fs/promises';
+import { mkdtemp, rm, writeFile, readFile, symlink } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
-import { join, resolve, dirname } from 'node:path';
+import { join, resolve, dirname, toNamespacedPath } from 'node:path';
 import { META_KEY } from '../src/reply.js';
+
+test('stdio discovery works through host-normalized entrypoint paths', { timeout: 60000 }, async t => {
+  const home = await mkdtemp(join(tmpdir(), 'acts-startup-'));
+  const serverPath = resolve(process.env.ACTS_TEST_SERVER || 'dist/server.mjs');
+  let entry = toNamespacedPath(serverPath);
+  if (process.platform !== 'win32') {
+    entry = join(home, 'server.mjs');
+    await symlink(serverPath, entry);
+  }
+  const transport = new StdioClientTransport({ command: process.execPath, args: [entry], cwd: home, env: { ACTS_EXCEL_HOME: home }, stderr: 'pipe' });
+  const client = new Client({ name: 'ACTS startup test', version: '1.0.0' });
+  t.after(async () => { await client.close(); await rm(home, { recursive: true, force: true }); });
+  await client.connect(transport);
+  assert.equal((await client.listTools()).tools.length, 8);
+});
 
 test('packaged stdio protocol exposes all eight app tools and completes the assistant workflow', { timeout: 180000 }, async t => {
   const home = await mkdtemp(join(tmpdir(), 'acts-mcp-'));

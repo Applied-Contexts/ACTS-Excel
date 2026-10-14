@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { mkdtemp, writeFile, readFile, rm } from 'node:fs/promises';
-import { join, resolve } from 'node:path';
+import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { Engine } from '../src/engine.js';
 import { workbook } from './fixtures.js';
@@ -9,7 +9,7 @@ import { workbook } from './fixtures.js';
 async function fixture(t: { after: (fn: () => Promise<void>) => void }) {
   const dir = await mkdtemp(join(tmpdir(), 'acts-test-'));
   t.after(() => rm(dir, { recursive: true, force: true }));
-  return { dir, engine: new Engine(join(dir, 'db'), resolve('dist/excel.duckdb_extension')) };
+  return { dir, engine: new Engine(join(dir, 'db')) };
 }
 
 test('CSV ingestion, SQL analysis, immutable pagination, transformation and exact exports', async t => {
@@ -48,7 +48,7 @@ test('CSV ingestion, SQL analysis, immutable pagination, transformation and exac
   await engine.forget([query.result_id!], ['clean_sales']);
   await assert.rejects(engine.read({ result_id: query.result_id! }), /Result not found/);
   assert.equal((await engine.read({ result_id: transformed.result_id! })).total, 2);
-  const restarted = new Engine(engine.home, resolve('dist/excel.duckdb_extension'));
+  const restarted = new Engine(engine.home);
   assert.equal((await restarted.catalog()).total, 3);
 });
 
@@ -126,7 +126,7 @@ test('a malformed second sheet leaves no partially imported tables', async t => 
 
 test('expensive SQL can be interrupted and the workspace remains usable', async t => {
   const { engine } = await fixture(t);
-  const timed = new Engine(engine.home, resolve('dist/excel.duckdb_extension'), 500);
+  const timed = new Engine(engine.home, undefined, 500);
   await assert.rejects(timed.query('SELECT sum(a.i * b.i + random()) FROM range(1000000000) a(i), range(1000000000) b(i)'), /interrupt/i);
   assert.equal((await engine.query('SELECT 42 AS answer')).rows[0][0], 42);
   assert.equal((await engine.query('SUMMARIZE SELECT 1 AS value')).rows.length, 1);
