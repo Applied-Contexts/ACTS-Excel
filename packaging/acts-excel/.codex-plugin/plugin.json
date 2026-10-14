@@ -1,6 +1,6 @@
 {
   "name": "acts-excel",
-  "version": "0.0.1",
+  "version": "0.0.2",
   "description": "Analyze local spreadsheets with SQL and compact, recoverable results.",
   "author": {
     "name": "Applied Contexts"
@@ -15,7 +15,7 @@
   "mcpServers": "./.mcp.json",
   "interface": {
     "displayName": "ACTS Excel",
-    "shortDescription": "Local spreadsheets. Precise answers.",
+    "shortDescription": "Local spreadsheet analysis",
     "longDescription": "Import spreadsheet files, query only the data you need, save SQL transformations, recover complete values and export results. Your data stays on this computer. Interactive tool faces make every operation easy to inspect.",
     "developerName": "Applied Contexts",
     "category": "Productivity",

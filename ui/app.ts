@@ -2,7 +2,7 @@ import { App, applyHostStyleVariables, type McpUiHostContext } from '@modelconte
 import type { Envelope, Cell } from '../src/types.js';
 
 const META_KEY = 'com.appliedcontexts.acts-excel/result';
-const app = new App({ name: 'ACTS Excel', version: '0.0.1' }, {});
+const app = new App({ name: 'ACTS Excel', version: '0.0.2' }, {});
 const el = <T extends HTMLElement = HTMLElement>(id: string) => document.getElementById(id) as T;
 const node = <K extends keyof HTMLElementTagNameMap>(tag: K, text = '', cls = '') => { const n = document.createElement(tag); n.textContent = text; if (cls) n.className = cls; return n; };
 const text = (v: Cell) => v === null ? 'null' : typeof v === 'string' ? v : JSON.stringify(v);

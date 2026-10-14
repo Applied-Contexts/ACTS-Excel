@@ -1,24 +1,38 @@
 {
   "$schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
   "name": "acts-excel",
-  "version": "0.0.1",
+  "version": "0.0.2",
   "description": "Analyze local spreadsheets with SQL and compact, recoverable results.",
-  "author": { "name": "Applied Contexts" },
+  "author": {
+    "name": "Applied Contexts"
+  },
   "repository": "https://github.com/Applied-Contexts/ACTS-Excel",
-  "keywords": ["excel", "spreadsheets", "sql", "analysis"],
+  "keywords": [
+    "excel",
+    "spreadsheets",
+    "sql",
+    "analysis"
+  ],
   "extensions": {
     "com.openai": {
       "requires_local_executor": true,
       "interface": {
         "displayName": "ACTS Excel",
-        "shortDescription": "Local spreadsheets. Precise answers.",
+        "shortDescription": "Local spreadsheet analysis",
         "longDescription": "Import spreadsheet files, query only the data you need, save SQL transformations, recover complete values and export results. Your data stays on this computer. Interactive tool faces make every operation easy to inspect.",
         "developerName": "Applied Contexts",
         "category": "Productivity",
-        "capabilities": ["Read", "Write", "Interactive"],
+        "capabilities": [
+          "Read",
+          "Write",
+          "Interactive"
+        ],
         "brandColor": "#267550",
         "websiteURL": "https://github.com/Applied-Contexts/ACTS-Excel",
-        "defaultPrompt": ["Analyze an Excel file on my computer.", "Clean a spreadsheet and export the result."]
+        "defaultPrompt": [
+          "Analyze an Excel file on my computer.",
+          "Clean a spreadsheet and export the result."
+        ]
       }
     }
   }
