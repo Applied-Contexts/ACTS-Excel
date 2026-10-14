@@ -36,11 +36,18 @@ export async function createServer(engine = new Engine(), htmlPath = fileURLToPa
         const result = await run(args);
         if (raw) {
           const value = result as { text: string; offset: number; next_offset: number | null; total_chars: number; [key: string]: unknown };
-          let serialized = JSON.stringify(value);
+          const visible = { ...value };
+          if (JSON.stringify({ ...visible, text: '' }).length > Number(args.max_chars) - 64) {
+            delete visible.column;
+            visible.column_omitted = 'The column is the same as requested.';
+          }
+          let serialized = JSON.stringify(visible);
           while (serialized.length > Number(args.max_chars) && value.text.length > 0) {
-            value.text = value.text.slice(0, Math.max(1, Math.floor(value.text.length * .75)));
+            value.text = value.text.slice(0, Math.floor(value.text.length * .75));
             value.next_offset = value.offset + value.text.length < value.total_chars ? value.offset + value.text.length : null;
-            serialized = JSON.stringify(value);
+            visible.text = value.text;
+            visible.next_offset = value.next_offset;
+            serialized = JSON.stringify(visible);
           }
           return { content: [{ type: 'text', text: serialized }], _meta: { [META_KEY]: { kind: 'cell', title: 'Full cell value', cell: value } } };
         }

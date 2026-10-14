@@ -35,6 +35,13 @@ test('packaged stdio protocol exposes all eight app tools and completes the assi
   assert.equal(query.rows[0][0], '30');
   assert.equal((await invoke('read_result', { result_id: query.result_id })).rows[0][0], '30');
   assert.equal((await invoke('read_cell', { result_id: query.result_id, row: 0, column: 'total' })).text, '30');
+  const longColumn = '\t'.repeat(900);
+  const wide = await invoke('query', { sql: `SELECT repeat('x', 3000) AS "${longColumn}"`, max_chars: 2000 });
+  const cellResult = await client.callTool({ name: 'read_cell', arguments: { result_id: wide.result_id, row: 0, column: longColumn, max_chars: 2000 } });
+  assert.equal(cellResult.isError, undefined);
+  const cellText = (cellResult.content as { text: string }[])[0].text;
+  assert.ok(cellText.length <= 2000);
+  assert.ok(JSON.parse(cellText).text.length > 0);
   const exported = await invoke('export', { result_id: query.result_id, format: 'xlsx' });
   assert.ok(exported.path.endsWith('.xlsx'));
   const error = await client.callTool({ name: 'query', arguments: { sql: 'DROP SCHEMA data CASCADE' } });
