@@ -5,6 +5,7 @@ import { DuckDBInstance } from '@duckdb/node-api';
 import { execFileSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { zipSync } from 'fflate';
+import { validatePortableCommand } from './plugin-package.mjs';
 const platforms = { 'win32-x64': 'windows_amd64', 'linux-x64': 'linux_amd64' };
 const target = process.argv[2] || 'win32-x64';
 if (!(target in platforms)) throw new Error(`Unsupported target: ${target}`);
@@ -63,7 +64,8 @@ await chmod(join(stage, 'runtime', runtimeName), 0o755);
 for (const filename of ['mcp.json', '.mcp.json']) {
   const config = JSON.parse(await readFile(join(stage, filename), 'utf8'));
   const placeholder = filename === 'mcp.json' ? '${PLUGIN_ROOT}' : '${CLAUDE_PLUGIN_ROOT}';
-  config.mcpServers['acts-excel'].command = `${placeholder}/runtime/${runtimeName}`;
+  config.mcpServers['acts-excel'].command = filename === 'mcp.json' ? `./runtime/${runtimeName}` : `${placeholder}/runtime/${runtimeName}`;
+  if (filename === 'mcp.json') await validatePortableCommand(config.mcpServers['acts-excel'].command, stage);
   await writeFile(join(stage, filename), JSON.stringify(config, null, 2));
 }
 await mkdir(join(stage, 'notices'), { recursive: true });
