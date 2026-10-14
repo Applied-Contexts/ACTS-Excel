@@ -1,0 +1,10 @@
+node_modules/
+dist/
+release/
+.stage/
+playwright-report/
+test-results/
+*.duckdb
+*.duckdb.wal
+.env
+.DS_Store

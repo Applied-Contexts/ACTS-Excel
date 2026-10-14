@@ -1,0 +1,34 @@
+{
+  "name": "acts-excel",
+  "version": "0.0.1",
+  "description": "Analyze local spreadsheets with SQL and compact, recoverable results.",
+  "author": {
+    "name": "Applied Contexts"
+  },
+  "repository": "https://github.com/Applied-Contexts/ACTS-Excel",
+  "keywords": [
+    "excel",
+    "spreadsheets",
+    "sql",
+    "analysis"
+  ],
+  "mcpServers": "./.mcp.json",
+  "interface": {
+    "displayName": "ACTS Excel",
+    "shortDescription": "Local spreadsheets. Precise answers.",
+    "longDescription": "Import spreadsheet files, query only the data you need, save SQL transformations, recover complete values and export results. Your data stays on this computer. Interactive tool faces make every operation easy to inspect.",
+    "developerName": "Applied Contexts",
+    "category": "Productivity",
+    "capabilities": [
+      "Read",
+      "Write",
+      "Interactive"
+    ],
+    "brandColor": "#267550",
+    "websiteURL": "https://github.com/Applied-Contexts/ACTS-Excel",
+    "defaultPrompt": [
+      "Analyze an Excel file on my computer.",
+      "Clean a spreadsheet and export the result."
+    ]
+  }
+}

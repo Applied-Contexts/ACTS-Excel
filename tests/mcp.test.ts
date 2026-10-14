@@ -1,0 +1,45 @@
+import { test } from 'node:test';
+import assert from 'node:assert/strict';
+import { Client } from '@modelcontextprotocol/sdk/client/index.js';
+import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js';
+import { mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join, resolve, dirname } from 'node:path';
+import { META_KEY } from '../src/reply.js';
+
+test('packaged stdio protocol exposes all eight app tools and completes the assistant workflow', { timeout: 180000 }, async t => {
+  const home = await mkdtemp(join(tmpdir(), 'acts-mcp-'));
+  t.after(() => rm(home, { recursive: true, force: true }));
+  const serverPath = resolve(process.env.ACTS_TEST_SERVER || 'dist/server.mjs');
+  const command = process.env.ACTS_TEST_SERVER ? resolve(dirname(serverPath), '../runtime', process.platform === 'win32' ? 'node.exe' : 'node') : process.execPath;
+  const transport = new StdioClientTransport({ command, args: [serverPath], env: { PATH: process.env.PATH || '', ACTS_EXCEL_HOME: home }, stderr: 'pipe' });
+  const client = new Client({ name: 'ACTS integration test', version: '1.0.0' });
+  t.after(() => client.close());
+  await client.connect(transport);
+  const tools = await client.listTools();
+  assert.equal(tools.tools.length, 8);
+  for (const tool of tools.tools) assert.ok((tool._meta?.ui as { resourceUri: string }).resourceUri.startsWith('ui://acts-excel/'));
+  const resources = await client.listResources();
+  const resource = await client.readResource({ uri: resources.resources[0].uri });
+  assert.equal(resource.contents[0].mimeType, 'text/html;profile=mcp-app');
+  assert.match(String('text' in resource.contents[0] ? resource.contents[0].text : ''), /ACTS Excel/);
+  const path = join(home, 'input.csv'); await writeFile(path, 'name,amount\nA,10\nB,20\n');
+  const invoke = async (name: string, args: Record<string, unknown>) => {
+    const result = await client.callTool({ name, arguments: args }, undefined, { timeout: 120000 });
+    assert.equal(result.isError, undefined, JSON.stringify(result.content));
+    assert.equal(result.structuredContent, undefined);
+    const p = result._meta![META_KEY] as any; return p.kind === 'cell' ? p.cell : p;
+  };
+  const imported = await invoke('ingest', { path });
+  const query = await invoke('query', { sql: `SELECT sum(amount) AS total FROM ${imported.rows[0][0]}`, max_chars: 2000 });
+  assert.equal(query.rows[0][0], '30');
+  assert.equal((await invoke('read_result', { result_id: query.result_id })).rows[0][0], '30');
+  assert.equal((await invoke('read_cell', { result_id: query.result_id, row: 0, column: 'total' })).text, '30');
+  const exported = await invoke('export', { result_id: query.result_id, format: 'xlsx' });
+  assert.ok(exported.path.endsWith('.xlsx'));
+  const error = await client.callTool({ name: 'query', arguments: { sql: 'DROP SCHEMA data CASCADE' } });
+  assert.equal(error.isError, true);
+  assert.equal((error._meta![META_KEY] as any).kind, 'error');
+  const invalid = await client.callTool({ name: 'read_result', arguments: { result_id: '../escape' } });
+  assert.equal(invalid.isError, true);
+});
