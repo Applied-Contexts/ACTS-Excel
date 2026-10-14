@@ -131,3 +131,15 @@ test('expensive SQL can be interrupted and the workspace remains usable', async 
   assert.equal((await engine.query('SELECT 42 AS answer')).rows[0][0], 42);
   assert.equal((await engine.query('SUMMARIZE SELECT 1 AS value')).rows.length, 1);
 });
+
+
+test('filenames with brackets are literal files, never glob expressions', async t => {
+  const { dir, engine } = await fixture(t);
+  const path = join(dir, 'sales[1].csv');
+  await writeFile(path, 'name\nintended\n');
+  await writeFile(join(dir, 'sales1.csv'), 'name\nunintended\n');
+  const imported = await engine.ingest({ path });
+  assert.deepEqual((await engine.query(`SELECT * FROM ${imported.rows[0][0]}`)).rows, [['intended']]);
+  const { readdir } = await import('node:fs/promises');
+  assert.ok(!(await readdir(engine.home)).some(name => name.startsWith('ingest-')));
+});

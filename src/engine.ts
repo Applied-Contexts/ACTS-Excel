@@ -1,7 +1,7 @@
 import { DuckDBInstance, StatementType, type DuckDBConnection, type DuckDBValue } from '@duckdb/node-api';
 import { createHash, randomUUID } from 'node:crypto';
 import { createReadStream } from 'node:fs';
-import { mkdir, realpath, stat, link, unlink, mkdtemp, rm } from 'node:fs/promises';
+import { mkdir, realpath, stat, link, unlink, mkdtemp, rm, copyFile } from 'node:fs/promises';
 import { basename, dirname, extname, isAbsolute, join, resolve } from 'node:path';
 import { homedir } from 'node:os';
 import { fileURLToPath } from 'node:url';
@@ -108,14 +108,19 @@ export class Engine {
     const ext = extname(path).toLowerCase();
     if (!['.xlsx', '.csv', '.tsv', '.parquet', '.json', '.jsonl', '.ndjson'].includes(ext)) throw new Error('Supported: .xlsx, .csv, .tsv, .parquet, .json, .jsonl, .ndjson. Save legacy .xls/.xlsb or macro workbooks as .xlsx first.');
     if (ext !== '.xlsx' && (options.sheet || options.range)) throw new Error('sheet and range are XLSX options.');
+    await mkdir(this.home, { recursive: true, mode: 0o700 });
+    const staging = await mkdtemp(join(this.home, 'ingest-'));
+    const source = join(staging, `input${ext}`);
+    try {
+    await copyFile(path, source);
     const digest = createHash('sha256');
-    for await (const chunk of createReadStream(path)) digest.update(chunk);
+    for await (const chunk of createReadStream(source)) digest.update(chunk);
     digest.update(JSON.stringify({ header: options.header, range: options.range, all_text: options.all_text }));
     const hash = digest.digest('hex').slice(0, 12);
-    const sheets = ext === '.xlsx' ? await sheetNames(path) : [{ name: basename(path, ext), hidden: false }];
+    const sheets = ext === '.xlsx' ? await sheetNames(source) : [{ name: basename(path, ext), hidden: false }];
     const selected = options.sheet ? sheets.filter(s => s.name === options.sheet) : sheets;
     if (!selected.length) throw new Error(`Sheet not found. Available sheets: ${sheets.map(s => JSON.stringify(s.name)).join(', ')}`);
-    return this.task(true, ext === '.xlsx', async c => {
+    return await this.task(true, ext === '.xlsx', async c => {
       const imported: string[] = [];
       const staged: { name: string; stage: string; sheet: string; rows: number; notes: string[] }[] = [];
       for (let i = 0; i < selected.length; i++) {
@@ -129,7 +134,7 @@ export class Engine {
           let reader: string;
           if (ext === '.xlsx') {
             const opts = [`sheet=${literal(sheet.name)}`, 'stop_at_empty=false', 'ignore_errors=false', ...(options.header === undefined ? [] : [`header=${options.header}`]), ...(options.range ? [`range=${literal(options.range)}`] : [])];
-            const read = (allText: boolean) => `read_xlsx(${literal(path)}, ${opts.join(',')}, all_varchar=${allText})`;
+            const read = (allText: boolean) => `read_xlsx(${literal(source)}, ${opts.join(',')}, all_varchar=${allText})`;
             reader = read(options.all_text ?? false);
             notes.push('Imported cached values. Formulas are not recalculated; formatting, charts and macros are not carried into data exports.');
             try { await c.run(`CREATE TEMP TABLE ${stage} AS SELECT * FROM ${reader}`); }
@@ -144,7 +149,7 @@ export class Engine {
               } else throw new Error(`Sheet ${JSON.stringify(sheet.name)} could not be imported: ${message}. Use sheet/range/header to select the data region.`);
             }
           } else {
-            reader = ext === '.parquet' ? `read_parquet(${literal(path)})` : ['.json', '.jsonl', '.ndjson'].includes(ext) ? `read_json_auto(${literal(path)}, maximum_object_size=16777216)` : `read_csv(${literal(path)}, sample_size=-1, all_varchar=${options.all_text ?? false}${options.header === undefined ? '' : `,header=${options.header}`}${ext === '.tsv' ? ",delim='\\t'" : ''})`;
+            reader = ext === '.parquet' ? `read_parquet(${literal(source)})` : ['.json', '.jsonl', '.ndjson'].includes(ext) ? `read_json_auto(${literal(source)}, maximum_object_size=16777216)` : `read_csv(${literal(source)}, sample_size=-1, all_varchar=${options.all_text ?? false}${options.header === undefined ? '' : `,header=${options.header}`}${ext === '.tsv' ? ",delim='\\t'" : ''})`;
             await c.run(`CREATE TEMP TABLE ${stage} AS SELECT * FROM ${reader}`);
           }
           const rows = Number((await c.runAndReadAll(`SELECT count(*) n FROM ${stage}`)).getRowObjectsJson()[0].n);
@@ -163,6 +168,7 @@ export class Engine {
         return this.snapshot(c, `SELECT 'data.' || name AS sql_table, sheet, rows, notes FROM _acts.tables WHERE name IN (${placeholders}) ORDER BY created,name`, 'ingest', `${selected.length} sheet${selected.length === 1 ? '' : 's'} ready · ${basename(path).slice(0, 160)}`, ['Use catalog(table) for columns, then query(sql). Re-ingesting identical data and options reuses saved tables.'], undefined, imported);
       });
     });
+    } finally { await rm(staging, { recursive: true, force: true }); }
   }
 
   async query(sql: string, params: DuckDBValue[] = [], name?: string): Promise<Page> {
