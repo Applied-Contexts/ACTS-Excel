@@ -46,4 +46,4 @@ for (const asset of uploaded.assets) {
   if (!file || asset.state !== 'uploaded' || asset.size !== file.size || (asset.digest && asset.digest !== file.digest)) throw new Error(`Upload verification failed for ${asset.name}; release remains a draft`);
 }
 gh(['release', 'edit', tag, '--repo', repo, '--draft=false']);
-console.log(uploaded.html_url);
+console.log(JSON.parse(gh(['release', 'view', tag, '--repo', repo, '--json', 'url'])).url);
