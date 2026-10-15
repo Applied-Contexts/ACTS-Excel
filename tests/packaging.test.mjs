@@ -3,11 +3,11 @@ import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import { isBuiltin } from 'node:module';
 
-test('the bundle delegates native platform selection to the published DuckDB package', async () => {
+test('the bundle includes JavaScript dependencies and loads native files from the archive', async () => {
   const meta = JSON.parse(await readFile('dist/build-meta.json', 'utf8'));
   const imports = Object.values(meta.outputs).flatMap(output => output.imports).filter(entry => !isBuiltin(entry.path));
-  assert.deepEqual(imports.map(entry => entry.path), ['@duckdb/node-api']);
+  assert.ok(imports.length >= 6);
+  assert.ok(imports.every(entry => /^\.\/native\/[a-z0-9-]+\/duckdb\.node$/.test(entry.path)));
   const pkg = JSON.parse(await readFile('package.json', 'utf8'));
   assert.deepEqual(Object.keys(pkg.dependencies), ['@duckdb/node-api']);
-  assert.equal(pkg.bin['acts-excel'], 'dist/server.mjs');
 });

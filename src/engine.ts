@@ -1,5 +1,5 @@
-import type { DuckDBConnection, DuckDBValue } from '@duckdb/node-api';
-import { getDuckDB } from './runtime.js';
+import { DuckDBInstance, StatementType, type DuckDBConnection, type DuckDBValue } from '@duckdb/node-api';
+import { fileURLToPath } from 'node:url';
 import { createHash, randomUUID } from 'node:crypto';
 import { createReadStream } from 'node:fs';
 import { mkdir, realpath, stat, link, unlink, mkdtemp, rm, copyFile } from 'node:fs/promises';
@@ -27,7 +27,6 @@ export class Engine {
 
   private async task<T>(external: boolean, excel: boolean, work: (c: DuckDBConnection) => Promise<T>): Promise<T> {
     const run = this.tail.then(async () => {
-      const { DuckDBInstance } = await getDuckDB(this.home);
       await mkdir(this.home, { recursive: true, mode: 0o700 });
       const db = await DuckDBInstance.create(join(this.home, 'workspace.duckdb'), {
         memory_limit: '1GB', threads: '4', max_temp_directory_size: '2GB',
@@ -44,11 +43,9 @@ export class Engine {
         await c.run('CREATE TABLE IF NOT EXISTS _acts.results(id VARCHAR PRIMARY KEY, kind VARCHAR, title VARCHAR, notes VARCHAR, table_name VARCHAR, created TIMESTAMP DEFAULT current_timestamp)');
         await c.run("SET search_path='data,main'; SET preserve_insertion_order=true");
         if (excel) {
-          if (this.extension) await c.run(`LOAD ${literal(this.extension)}`);
-          else {
-            await c.run('INSTALL excel FROM core');
-            await c.run('LOAD excel');
-          }
+          const platform = String((await c.runAndReadAll('PRAGMA platform')).getRowsJson()[0][0]);
+          const extension = this.extension || fileURLToPath(new URL(`../dist/extensions/${platform}/excel.duckdb_extension`, import.meta.url));
+          await c.run(`LOAD ${literal(extension)}`);
         }
         if (!external && excel) await c.run('SET enable_external_access=false');
         await c.run('SET lock_configuration=true');
@@ -73,7 +70,6 @@ export class Engine {
   }
 
   private async select(c: DuckDBConnection, sql: string, params: DuckDBValue[] = []) {
-    const { StatementType } = await getDuckDB(this.home);
     const extracted = await c.extractStatements(sql);
     if (extracted.count !== 1) throw new Error('Use one SELECT or WITH query. Transformations create a new table from the query.');
     const prepared = await extracted.prepare(0);
