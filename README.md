@@ -6,23 +6,19 @@ ACTS Excel requires **Node.js 22+ and npm** in the environment where your MCP cl
 
 ## Install in ChatGPT desktop
 
-Download **[ACTS-Excel-0.0.5-chatgpt.zip](https://github.com/Applied-Contexts/ACTS-Excel/releases/download/v0.0.5/ACTS-Excel-0.0.5-chatgpt.zip)** and import it using ChatGPT's plugin ZIP import. Use the plugin in a local task with local execution enabled. The same ZIP works with Windows, macOS, Linux, and WSL; there is no architecture selection.
+Download **[ACTS-Excel-0.0.6-chatgpt.zip](https://github.com/Applied-Contexts/ACTS-Excel/releases/download/v0.0.6/ACTS-Excel-0.0.6-chatgpt.zip)** and import it using ChatGPT's plugin ZIP import. Use the plugin in a local task with local execution enabled. The same ZIP works with Windows, macOS, Linux, and WSL; there is no architecture selection.
 
-The plugin runs `npx` with an exact versioned npm archive hosted in this repository's GitHub release. npm downloads and caches the server and selects DuckDB's native dependency for the actual Node process. The first XLSX operation installs DuckDB's signed Excel extension. Initial setup needs internet access to GitHub, the npm registry, and DuckDB's extension repository. Subsequent starts still need access to GitHub because npm resolves the tarball URL even with a populated cache; this launcher does not promise offline startup. Spreadsheet contents are not sent to these services.
+The ZIP contains the bundled JavaScript server and interface (under 1 MB compressed). ChatGPT starts it with `node`; it answers MCP initialization and lists its tools without downloading anything. The first data operation uses `npm ci` with the included lockfile to install DuckDB's native dependency into the local ACTS Excel data directory. npm selects the platform package and verifies its recorded integrity. No dependency install scripts run.
 
-For an explicit setup check, or a client with a short startup timeout, run this once in the client's execution environment before connecting:
+First use needs internet access to the npm registry and, for XLSX, DuckDB's signed extension repository. Later launches reuse the installed dependency without contacting GitHub or npm. Keep the data directory to preserve the native runtime, Excel extension, imported tables, and results. Spreadsheet contents are not sent to the dependency services.
 
-```sh
-npx --yes --package=https://github.com/Applied-Contexts/ACTS-Excel/releases/download/v0.0.5/acts-excel-0.0.5.tgz acts-excel --setup
-```
-
-Wait for **“ACTS Excel is ready”**, then reconnect the plugin. This fills npm's cache and installs the Excel extension. If ChatGPT uses WSL, run setup inside WSL and use Linux paths such as `/mnt/c/Users/you/Documents/sales.xlsx`. For native Windows execution, use a path such as `C:\Users\you\Documents\sales.xlsx`.
+If setup fails, the tool returns the npm error with retry instructions; the plugin stays connected. Install Node.js 22+ **with npm** before importing the ZIP, then restart ChatGPT so its process sees Node on PATH. If ChatGPT uses WSL for a task, that environment also needs Node and npm; use paths such as `/mnt/c/Users/you/Documents/sales.xlsx`. Native Windows tools use paths such as `C:\Users\you\Documents\sales.xlsx`.
 
 Ask: **“Use ACTS Excel to import my sales.xlsx file and summarize revenue by region.”** Include its absolute local path. Successful discovery exposes eight tools: `ingest`, `catalog`, `query`, `transform`, `read_result`, `read_cell`, `export`, and `forget`.
 
 ### Other MCP clients
 
-Use the same npm command in your client's stdio configuration:
+Other stdio clients can install the separately published npm runtime with a pinned command:
 
 ```json
 {
@@ -31,7 +27,7 @@ Use the same npm command in your client's stdio configuration:
       "command": "npx",
       "args": [
         "--yes",
-        "--package=https://github.com/Applied-Contexts/ACTS-Excel/releases/download/v0.0.5/acts-excel-0.0.5.tgz",
+        "--package=https://github.com/Applied-Contexts/ACTS-Excel/releases/download/v0.0.6/acts-excel-0.0.6.tgz",
         "acts-excel"
       ]
     }
@@ -43,9 +39,9 @@ On Windows, a client that cannot resolve npm's `.cmd` launcher needs `"command":
 
 ### Release files and upgrades
 
-Each release contains one small ChatGPT plugin ZIP, one npm `.tgz` runtime package, and their SHA-256 files. Import the **plugin ZIP** into ChatGPT. The `.tgz` is fetched by npm; GitHub's generated source ZIP is for source development. Starting with 0.0.5, use standard stdio configuration for other clients instead of the old platform-specific MCPB packages.
+Each release contains one small ChatGPT plugin ZIP, one npm `.tgz` runtime package, and their SHA-256 files. Import the **plugin ZIP** into ChatGPT. The `.tgz` is for the npm command used by other MCP clients; GitHub's generated source ZIP is for source development. Starting with 0.0.5, use standard stdio configuration for other clients instead of the old platform-specific MCPB packages.
 
-To upgrade, import the new plugin ZIP or update the versioned URL in your MCP configuration. There is no mutable `latest` dependency. Downloads can be checked against the adjacent `.sha256` file with `sha256sum`, `shasum -a 256`, or PowerShell's `Get-FileHash -Algorithm SHA256`.
+To upgrade, import the new plugin ZIP or update the versioned URL in another client’s MCP configuration. There is no mutable `latest` dependency. Downloads can be checked against the adjacent `.sha256` file with `sha256sum`, `shasum -a 256`, or PowerShell's `Get-FileHash -Algorithm SHA256`.
 
 ## Use and data storage
 
@@ -85,19 +81,19 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) for the code layout, tests, local release
 
 ## Troubleshooting
 
-- **Tools do not appear:** run the setup command in the client's execution environment. Check `node --version`, `npm --version`, and the client's MCP stderr log. A desktop application may use a different PATH or WSL environment from your terminal.
-- **Startup timeout:** complete the explicit setup command, then reconnect. The first npm install needs more time on a slow connection. Clients that support a configurable MCP startup timeout can increase it.
+- **Tools do not appear:** check `node --version` in the client’s execution environment and restart ChatGPT after installing Node. The plugin ZIP requires Node on PATH; native dependency setup happens only when a data tool is called.
+- **First data tool reports setup failure:** check `npm --version` and access to `registry.npmjs.org`, then retry the tool. Setup failures do not prevent tool discovery. Other clients using the `npx` command can preinstall with the same command plus `--setup` or increase their MCP startup timeout.
 - **ChatGPT rejects the upload:** check that the selected file is `ACTS-Excel-VERSION-chatgpt.zip`. Archive import and MCP startup are separate steps; “Couldn't add plugin” alone does not identify a dependency or native-library error. A release's validation notes state which host import paths were tested.
 - **Database locked:** stop other ACTS Excel processes or give each client a separate `ACTS_EXCEL_HOME`.
 - **File not found:** supply an absolute path readable in the server's environment. A cloud attachment is not automatically a local file, and native Windows and WSL use different paths.
 
 ## Packaging design
 
-The plugin is configuration; the server is an ordinary npm package with an `acts-excel` executable. The package is built once and attached to a versioned GitHub release. npm installs the platform dependency from DuckDB's optional dependencies, and DuckDB installs and verifies its own version-matched Excel extension. There is no custom binary downloader or plugin post-install hook.
+The ChatGPT plugin bundles the small MCP server, tool schemas, interface, and license notices. Native code is excluded. MCP initialization never waits for a package download or native-library load. The first data call installs the exact dependency lockfile with standard `npm ci --omit=dev --ignore-scripts`, then loads DuckDB. Setup is staged in a temporary directory and published atomically, so interrupted or concurrent setup cannot expose a partial runtime. A failed attempt can be retried.
 
-This follows the npm launch pattern used by the [MCP filesystem reference server](https://github.com/modelcontextprotocol/servers/tree/main/src/filesystem) and the [Playwright plugin](https://github.com/anthropics/claude-plugins-official/blob/main/external_plugins/playwright/.mcp.json). Platform selection is implemented by [DuckDB's Node bindings](https://github.com/duckdb/duckdb-node-neo/blob/main/bindings/pkgs/%40duckdb/node-bindings/duckdb.js). MCP itself supplies process transport, not package installation.
+The runtime cache is keyed by the lockfile hash, operating system, and architecture under `ACTS_EXCEL_HOME/runtime`. `ACTS_EXCEL_RUNTIME_HOME` can select a separate runtime-cache directory. DuckDB verifies and caches its signed Excel extension under `ACTS_EXCEL_HOME/extensions`. These paths use the default data directory above when `ACTS_EXCEL_HOME` is unset. Plugin upgrades and removal do not delete stored data.
 
-npm stores runtime packages in its normal cache; Excel extensions are cached under `ACTS_EXCEL_HOME/extensions` (or the default data directory above). Keep those caches for reuse. Removing or upgrading a plugin does not remove your stored spreadsheets or results.
+For other MCP clients, the separate npm package follows the launch pattern used by the [MCP filesystem reference server](https://github.com/modelcontextprotocol/servers/tree/main/src/filesystem). Platform selection comes from [DuckDB's Node bindings](https://github.com/duckdb/duckdb-node-neo/blob/main/bindings/pkgs/%40duckdb/node-bindings/duckdb.js). MCP supplies process transport, not dependency installation. The ChatGPT ZIP keeps npm setup outside the desktop's MCP startup deadline.
 
 Public directory submission has separate review requirements; this repository's downloadable plugin is not a claim of directory approval.
 

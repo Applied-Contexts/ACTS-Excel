@@ -8,7 +8,7 @@ await rm('dist', { recursive: true, force: true });
 await mkdir('dist', { recursive: true });
 const server = await build({
   entryPoints: ['src/server.ts'], outfile: 'dist/server.mjs', bundle: true, platform: 'node', format: 'esm', target: 'node22', sourcemap: false, metafile: true, external: ['@duckdb/node-api'],
-  banner: { js: "#!/usr/bin/env node\nimport { createRequire } from 'node:module'; const require = createRequire(import.meta.url);" },
+  banner: { js: "#!/usr/bin/env node\nimport { createRequire as __actsCreateRequire } from 'node:module'; const require = __actsCreateRequire(import.meta.url);" },
 });
 await writeFile('dist/build-meta.json', JSON.stringify(server.metafile, null, 2));
 await chmod('dist/server.mjs', 0o755);

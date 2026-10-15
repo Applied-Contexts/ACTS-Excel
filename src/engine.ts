@@ -1,4 +1,5 @@
-import { DuckDBInstance, StatementType, type DuckDBConnection, type DuckDBValue } from '@duckdb/node-api';
+import type { DuckDBConnection, DuckDBValue } from '@duckdb/node-api';
+import { getDuckDB } from './runtime.js';
 import { createHash, randomUUID } from 'node:crypto';
 import { createReadStream } from 'node:fs';
 import { mkdir, realpath, stat, link, unlink, mkdtemp, rm, copyFile } from 'node:fs/promises';
@@ -26,6 +27,7 @@ export class Engine {
 
   private async task<T>(external: boolean, excel: boolean, work: (c: DuckDBConnection) => Promise<T>): Promise<T> {
     const run = this.tail.then(async () => {
+      const { DuckDBInstance } = await getDuckDB(this.home);
       await mkdir(this.home, { recursive: true, mode: 0o700 });
       const db = await DuckDBInstance.create(join(this.home, 'workspace.duckdb'), {
         memory_limit: '1GB', threads: '4', max_temp_directory_size: '2GB',
@@ -71,6 +73,7 @@ export class Engine {
   }
 
   private async select(c: DuckDBConnection, sql: string, params: DuckDBValue[] = []) {
+    const { StatementType } = await getDuckDB(this.home);
     const extracted = await c.extractStatements(sql);
     if (extracted.count !== 1) throw new Error('Use one SELECT or WITH query. Transformations create a new table from the query.');
     const prepared = await extracted.prepare(0);

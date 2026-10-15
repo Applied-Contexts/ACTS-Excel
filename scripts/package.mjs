@@ -7,20 +7,22 @@ import { build } from 'esbuild';
 
 const pkg = JSON.parse(await readFile('package.json', 'utf8'));
 const runtime = `${pkg.name}-${pkg.version}.tgz`;
-const url = `${pkg.repository}/releases/download/v${pkg.version}/${runtime}`;
 const source = 'packaging/acts-excel';
 for (const path of ['plugin.json', '.codex-plugin/plugin.json']) {
   if (JSON.parse(await readFile(join(source, path), 'utf8')).version !== pkg.version) throw new Error(`Version differs from package.json: ${path}`);
 }
 for (const path of ['mcp.json', '.mcp.json']) {
   const server = JSON.parse(await readFile(join(source, path), 'utf8')).mcpServers['acts-excel'];
-  if (server.command !== 'npx' || JSON.stringify(server.args) !== JSON.stringify(['--yes', `--package=${url}`, 'acts-excel'])) throw new Error(`Runtime URL or command differs: ${path}`);
+  if (server.command !== 'node' || JSON.stringify(server.args) !== JSON.stringify(['${PLUGIN_ROOT}/dist/server.mjs', '--plugin'])) throw new Error(`Plugin command differs: ${path}`);
 }
+const dependency = JSON.parse(await readFile(join(source, 'runtime/package.json'), 'utf8'));
+if (JSON.stringify(dependency.dependencies) !== JSON.stringify(pkg.dependencies)) throw new Error('Plugin runtime dependencies differ from package.json');
 await mkdir('release', { recursive: true });
 execFileSync(process.platform === 'win32' ? 'npm.cmd' : 'npm', ['pack', '--pack-destination', 'release'], { stdio: 'inherit', shell: process.platform === 'win32' });
 const stage = resolve('.stage/plugin/acts-excel');
 await rm(stage, { recursive: true, force: true });
 await cp(source, stage, { recursive: true });
+await cp('dist', join(stage, 'dist'), { recursive: true, filter: path => !path.endsWith('build-meta.json') });
 for (const file of ['README.md', 'LICENSE']) await cp(file, join(stage, file));
 await cp('dist/build-info.json', join(stage, 'build-info.json'));
 const files = {};

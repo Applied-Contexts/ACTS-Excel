@@ -7,6 +7,7 @@ Follow [source setup](README.md#build-from-source). Changes and pull requests ta
 | Path | Responsibility |
 | --- | --- |
 | `src/server.ts` | MCP schemas, tool registration, stdio transport, MCP App resource, setup command |
+| `src/runtime.ts` | Deferred, locked native dependency installation and cache |
 | `src/engine.ts` | DuckDB workspace, Excel extension installation, serialized operations, SQL/file boundaries |
 | `src/workbook.ts` | XLSX structure and worksheet inspection |
 | `src/reply.ts` | Response budgets, previews, recoverable truncation |
@@ -36,9 +37,9 @@ npm run test:ui
 
 `bundle` invokes `npm pack`, whose `prepack` script rebuilds the server. JavaScript dependencies are bundled; `@duckdb/node-api` remains a runtime npm dependency so npm can select its native optional dependency. No build scripts run during consumer installation.
 
-`test:package` validates both artifacts, extracts the actual plugin, and serves the exact npm tarball over a temporary loopback HTTP server. It substitutes only that test URL, starts the manifest's `npx` command with an empty npm cache, and exercises all tool discovery, CSV ingestion, SQL, cell recovery, and XLSX export. It repeats with the populated cache and normal networking. GitHub release redirects are not guaranteed to be available from npm's HTTP cache, so this is not an offline-startup test. This checks installation and runtime behavior on the executing machine; it does not prove a desktop's ZIP upload UI works.
+`test:package` checks both release artifacts and extracts the actual plugin ZIP. It requires MCP initialization and discovery within ten seconds before any native runtime installation, then exercises first-use dependency setup, CSV ingestion, SQL, cell recovery, and XLSX export. It repeats with the installed runtime and npm offline mode. This checks runtime behavior on the executing machine; it does not prove a desktop's ZIP upload UI works.
 
-Run `npm run test:host` with the desktop's `codex` executable on PATH, or set `ACTS_TEST_CODEX` to its absolute path. This opt-in check temporarily installs the extracted plugin through the real app-server `plugin/install` API, requires all eight tools to initialize, then uninstalls the test plugin. It uses a temporary local marketplace and isolated npm/data caches. It changes the current user's installed-plugin state for the duration of the check, so do not interrupt it.
+Run `npm run test:host` with the desktop's `codex` executable on PATH, or set `ACTS_TEST_CODEX` to its absolute path. This opt-in check temporarily installs the extracted plugin through app-server `plugin/install`, requires all eight tools to initialize, then uninstalls the test plugin. It uses a temporary local marketplace and isolated data directories. It changes installed-plugin state for the duration of the check, so do not interrupt it.
 
 Before release, also test the desktop host's ZIP upload UI where available. Test Windows with native Windows Node, not just WSL. Record the exact host and import method; do not label archive validation or a direct Node launch as a successful desktop installation. Unsupported or unavailable platform tests must be stated explicitly. The npm/extension downloads require internet access on the first run.
 
@@ -46,7 +47,7 @@ Before release, also test the desktop host's ZIP upload UI where available. Test
 
 Build, test, and publish locally or on developer-managed machines. **Never use GitHub Actions or GitHub-hosted CI.**
 
-1. Update `package.json`, the root version in `package-lock.json`, both plugin manifests, the pinned runtime URL in both MCP configs, and versioned setup/download links in README. Packaging rejects manifest or URL mismatches.
+1. Update `package.json`, the root version in `package-lock.json`, both plugin manifests, and versioned npm/download links in README. Packaging rejects manifest, command, or dependency mismatches.
 2. Commit and merge into `main`. From a clean checkout of that commit, run the verification commands above. The artifacts record that exact source commit.
 3. Write release notes outside the checkout with changes, actual installation/runtime coverage, and limitations. Test extracted packages and cold installs on available platforms. Do not overwrite published assets to fix a release.
 4. Create and push `vVERSION`, then publish:
@@ -59,7 +60,9 @@ npm run release -- --notes-file /absolute/path/release-notes.md --prerelease
 
 The command verifies the clean checkout, tag, checksums, size limits, and source provenance. It creates a draft containing the plugin ZIP, npm tarball, and their two SHA-256 files; verifies uploaded sizes and GitHub digests; and publishes it. A verification failure leaves the draft unpublished. Existing 0.0.x releases are prereleases.
 
-Verify the public pinned runtime URL after publication by setting `ACTS_TEST_PUBLISHED=1` and repeating `npm run test:package` and `npm run test:host`; this preserves the production URL instead of substituting loopback. The local release command also needs GitHub CLI authentication and `tar` on PATH. npm registry publication is not required: npm supports tarball URLs, and GitHub hosts this project's source and release assets. GitHub's generated source ZIP is not the plugin.
+Verify the published plugin ZIP's checksum and test it through ChatGPT desktop's ZIP import before calling that path verified. The separate npm runtime URL is for other MCP clients. The local release command needs GitHub CLI authentication and `tar` on PATH. npm registry publication is not required. GitHub's generated source ZIP is not the plugin.
+
+When changing DuckDB versions, update both the root dependencies and `packaging/acts-excel/runtime/package.json`, then regenerate both lockfiles. The plugin uses that dedicated production lockfile with `npm ci`; do not package `node_modules`. Keep dependency installation inside data operations so slow downloads cannot prevent MCP initialization.
 
 ## Forks
 
