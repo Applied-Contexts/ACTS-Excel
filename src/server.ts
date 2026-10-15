@@ -5,7 +5,6 @@ import { z } from 'zod';
 import { readFile } from 'node:fs/promises';
 import { createHash } from 'node:crypto';
 import { fileURLToPath } from 'node:url';
-import { resolve } from 'node:path';
 import { Engine } from './engine.js';
 import { META_KEY, reply } from './reply.js';
 import type { Page, ReplyOptions } from './types.js';
@@ -23,7 +22,7 @@ const sql = z.string().min(1).max(100000).describe('One DuckDB SELECT/WITH query
 export async function createServer(engine = new Engine(), htmlPath = fileURLToPath(new URL('./app.html', import.meta.url))) {
   const html = await readFile(htmlPath, 'utf8');
   const resourceUri = `ui://acts-excel/workbench-${createHash('sha256').update(html).digest('hex').slice(0, 12)}.html`;
-  const server = new McpServer({ name: 'ACTS-Excel', version: '0.0.2' }, { instructions });
+  const server = new McpServer({ name: 'ACTS-Excel', version: '0.0.3' }, { instructions });
   registerAppResource(server, 'ACTS-Excel workbench', resourceUri, {}, async () => ({ contents: [{ uri: resourceUri, mimeType: RESOURCE_MIME_TYPE, text: html, _meta: { ui: { csp: { connectDomains: [], resourceDomains: [] }, prefersBorder: true }, 'openai/widgetPrefersBorder': true } }] }));
 
   const add = (name: string, title: string, description: string, shape: z.ZodRawShape, run: (args: any) => Promise<Page | object>, mode: 'read' | 'write' | 'delete' = 'read', raw = false) => {
@@ -71,6 +70,4 @@ export async function createServer(engine = new Engine(), htmlPath = fileURLToPa
   return server;
 }
 
-if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
-  createServer().then(server => server.connect(new StdioServerTransport())).catch(error => { console.error(error); process.exitCode = 1; });
-}
+createServer().then(server => server.connect(new StdioServerTransport())).catch(error => { console.error(error); process.exitCode = 1; });

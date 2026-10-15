@@ -2,7 +2,7 @@
   "manifest_version": "0.3",
   "name": "acts-excel",
   "display_name": "ACTS Excel",
-  "version": "0.0.2",
+  "version": "0.0.3",
   "description": "Analyze local spreadsheets with SQL and compact, recoverable results.",
   "long_description": "Import an XLSX, CSV, TSV, Parquet or JSON file by path. Analyze and transform its data locally with DuckDB SQL. Read only the rows, columns and exact cell text you need, then export complete results. Interactive tool faces show status, tables, charts, paging and export controls. No Excel installation, Python environment or API key is required. XLSX uses cached values and exports data without original workbook formatting. Legacy XLS/XLSB must be saved as XLSX first.",
   "author": {
@@ -26,7 +26,9 @@
   },
   "compatibility": {
     "platforms": [
-      "win32"
+      "win32",
+      "darwin",
+      "linux"
     ],
     "runtimes": {
       "node": ">=22"

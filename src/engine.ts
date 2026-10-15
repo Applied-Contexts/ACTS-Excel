@@ -21,7 +21,7 @@ export type ReadOptions = { result_id: string; offset?: number; limit?: number; 
 export class Engine {
   readonly home: string;
   private tail: Promise<unknown> = Promise.resolve();
-  constructor(home = dataHome(), private extension = fileURLToPath(new URL('../dist/excel.duckdb_extension', import.meta.url)), private timeout = 60000) {
+  constructor(home = dataHome(), private extension?: string, private timeout = 60000) {
     this.home = resolve(home);
   }
 
@@ -41,7 +41,11 @@ export class Engine {
         await c.run('CREATE TABLE IF NOT EXISTS _acts.tables(name VARCHAR PRIMARY KEY, source VARCHAR, sheet VARCHAR, rows BIGINT, notes VARCHAR, created TIMESTAMP DEFAULT current_timestamp)');
         await c.run('CREATE TABLE IF NOT EXISTS _acts.results(id VARCHAR PRIMARY KEY, kind VARCHAR, title VARCHAR, notes VARCHAR, table_name VARCHAR, created TIMESTAMP DEFAULT current_timestamp)');
         await c.run("SET search_path='data,main'; SET preserve_insertion_order=true");
-        if (excel) await c.run(`LOAD ${literal(this.extension)}`);
+        if (excel) {
+          const platform = (await c.runAndReadAll('PRAGMA platform')).getRowsJson()[0][0];
+          const extension = this.extension || fileURLToPath(new URL(`../dist/extensions/${platform}/excel.duckdb_extension`, import.meta.url));
+          await c.run(`LOAD ${literal(extension)}`);
+        }
         if (!external && excel) await c.run('SET enable_external_access=false');
         await c.run('SET lock_configuration=true');
         timer = setTimeout(() => c?.interrupt(), this.timeout);

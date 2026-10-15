@@ -1,22 +1,18 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtemp, mkdir, writeFile, rm } from 'node:fs/promises';
-import { tmpdir } from 'node:os';
+import { readFile, stat } from 'node:fs/promises';
+import { isBuiltin } from 'node:module';
 import { join } from 'node:path';
-import { validatePortableCommand } from '../scripts/plugin-package.mjs';
 
-test('portable command rejects the 0.0.1 importer failure and paths outside the plugin', async () => {
-  for (const command of ['${PLUGIN_ROOT}/runtime/node.exe', '../runtime/node.exe', './runtime/../../node.exe', 'C:\\runtime\\node.exe']) {
-    await assert.rejects(validatePortableCommand(command, '.'), /bare executable name or a contained/);
+test('the JavaScript bundle needs only Node built-ins and ships every native import', async () => {
+  const meta = JSON.parse(await readFile('dist/build-meta.json', 'utf8'));
+  const imports = Object.values(meta.outputs).flatMap(output => output.imports).filter(entry => !isBuiltin(entry.path));
+  assert.equal(imports.length, 8);
+  for (const entry of imports) {
+    assert.match(entry.path, /^\.\/native\/(linux|darwin|win32)-(x64|arm64)(-musl)?\/duckdb\.node$/);
+    assert.ok((await stat(join('dist', entry.path))).isFile());
   }
-});
-
-test('portable command accepts the bundled executable and rejects a missing runtime', async t => {
-  const root = await mkdtemp(join(tmpdir(), 'acts-package-'));
-  t.after(() => rm(root, { recursive: true, force: true }));
-  await mkdir(join(root, 'runtime'));
-  await writeFile(join(root, 'runtime', 'node.exe'), 'fixture');
-  await validatePortableCommand('./runtime/node.exe', root);
-  await validatePortableCommand('node', root);
-  await assert.rejects(validatePortableCommand('./runtime/missing.exe', root), /ENOENT/);
+  for (const platform of ['linux_amd64', 'linux_arm64', 'linux_amd64_musl', 'linux_arm64_musl', 'windows_amd64', 'windows_arm64', 'osx_amd64', 'osx_arm64']) {
+    assert.ok((await stat(join('dist/extensions', platform, 'excel.duckdb_extension'))).isFile());
+  }
 });
