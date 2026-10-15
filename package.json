@@ -1,6 +1,6 @@
 {
   "name": "acts-excel",
-  "version": "0.0.6",
+  "version": "0.0.7",
   "private": true,
   "type": "module",
   "description": "Local spreadsheet analysis with SQL, recoverable previews, and interactive MCP tool faces",
@@ -18,7 +18,6 @@
     "test:ui": "playwright test",
     "test:package": "node --test tests/release.check.mjs",
     "release": "node scripts/release.mjs",
-    "prepack": "npm run build",
     "test:host": "node tests/host.check.mjs"
   },
   "dependencies": {
@@ -42,14 +41,5 @@
     "tmp": "^0.2.5",
     "node-forge": "1.4.0"
   },
-  "license": "MIT",
-  "bin": {
-    "acts-excel": "dist/server.mjs"
-  },
-  "files": [
-    "dist/server.mjs",
-    "dist/app.html",
-    "dist/build-info.json",
-    "dist/notices"
-  ]
+  "license": "MIT"
 }

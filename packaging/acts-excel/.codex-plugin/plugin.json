@@ -1,6 +1,6 @@
 {
   "name": "acts-excel",
-  "version": "0.0.6",
+  "version": "0.0.7",
   "description": "Analyze local spreadsheets with SQL and compact, recoverable results.",
   "author": {
     "name": "Applied Contexts"

@@ -10,7 +10,7 @@ const pkg = JSON.parse(await readFile('package.json', 'utf8'));
 const root = await mkdtemp(join(tmpdir(), 'acts-host-check-'));
 const market = 'acts-excel-verify-' + Date.now();
 const pluginRoot = join(root, 'acts-excel');
-const files = unzipSync(await readFile(join('release', `ACTS-Excel-${pkg.version}-chatgpt.zip`)));
+const files = unzipSync(await readFile(join('release', `ACTS-Excel-${pkg.version}-${process.arch}-chatgpt.zip`)));
 for (const [name, bytes] of Object.entries(files)) {
   const file = join(pluginRoot, name);
   await mkdir(dirname(file), { recursive: true });
@@ -19,14 +19,16 @@ for (const [name, bytes] of Object.entries(files)) {
 for (const file of ['mcp.json', '.mcp.json']) {
   const config = JSON.parse(await readFile(join(pluginRoot, file), 'utf8'));
   const server = config.mcpServers['acts-excel'];
-  server.env = { npm_config_cache: join(root, 'npm-cache'), ACTS_EXCEL_HOME: join(root, 'data') };
+  server.env = { ACTS_EXCEL_HOME: join(root, 'data') };
   await writeFile(join(pluginRoot, file), JSON.stringify(config));
 }
 await mkdir(join(root, '.agents/plugins'), { recursive: true });
 await mkdir(join(root, '.git'));
 const marketplacePath = join(root, '.agents/plugins/marketplace.json');
 await writeFile(marketplacePath, JSON.stringify({ name: market, plugins: [{ name: 'acts-excel', source: { source: 'local', path: './acts-excel' } }] }));
-const child = spawn(process.env.ACTS_TEST_CODEX || 'codex', ['app-server', '--enable', 'plugins'], { cwd: root, stdio: ['pipe', 'pipe', 'pipe'] });
+const codexHome = join(root, 'codex-home');
+await mkdir(codexHome);
+const child = spawn(process.env.ACTS_TEST_CODEX || 'codex', ['app-server', '--enable', 'plugins'], { cwd: root, env: { ...process.env, CODEX_HOME: codexHome }, stdio: ['pipe', 'pipe', 'pipe'] });
 let sequence = 0;
 const pending = new Map();
 child.stderr.resume();
