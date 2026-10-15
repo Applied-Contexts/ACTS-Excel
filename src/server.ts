@@ -71,4 +71,7 @@ export async function createServer(engine = new Engine(), htmlPath = fileURLToPa
   return server;
 }
 
-createServer().then(server => server.connect(new StdioServerTransport())).catch(error => { console.error(error); process.exitCode = 1; });
+const run = process.argv.includes('--setup')
+  ? new Engine().setup().then(() => console.error('ACTS Excel is ready. Restart or reconnect your MCP client.'))
+  : createServer().then(server => server.connect(new StdioServerTransport()));
+run.catch(error => { console.error(error); process.exitCode = 1; });

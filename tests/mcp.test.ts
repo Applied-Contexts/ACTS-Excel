@@ -1,5 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import { execFileSync } from 'node:child_process';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js';
 import { mkdtemp, rm, writeFile, readFile, symlink } from 'node:fs/promises';
@@ -7,7 +8,7 @@ import { tmpdir } from 'node:os';
 import { join, resolve, dirname, toNamespacedPath } from 'node:path';
 import { META_KEY } from '../src/reply.js';
 
-test('stdio discovery works through host-normalized entrypoint paths', { timeout: 60000 }, async t => {
+test('stdio discovery works through host-normalized entrypoint paths', { timeout: 60000, skip: !!process.env.ACTS_TEST_CONFIG }, async t => {
   const home = await mkdtemp(join(tmpdir(), 'acts-startup-'));
   const serverPath = resolve(process.env.ACTS_TEST_SERVER || 'dist/server.mjs');
   let entry = toNamespacedPath(serverPath);
@@ -18,28 +19,34 @@ test('stdio discovery works through host-normalized entrypoint paths', { timeout
   const transport = new StdioClientTransport({ command: process.execPath, args: [entry], cwd: home, env: { ACTS_EXCEL_HOME: home }, stderr: 'pipe' });
   const client = new Client({ name: 'ACTS startup test', version: '1.0.0' });
   t.after(async () => { await client.close(); await rm(home, { recursive: true, force: true }); });
-  await client.connect(transport);
+  await client.connect(transport, { timeout: 120000 });
   assert.equal((await client.listTools()).tools.length, 8);
 });
 
 test('packaged stdio protocol exposes all eight app tools and completes the assistant workflow', { timeout: 180000 }, async t => {
   const home = await mkdtemp(join(tmpdir(), 'acts-mcp-'));
-  t.after(() => rm(home, { recursive: true, force: true }));
   const serverPath = resolve(process.env.ACTS_TEST_SERVER || 'dist/server.mjs');
   const root = resolve(dirname(serverPath), '..');
   const expand = (value: string) => value.replaceAll('${PLUGIN_ROOT}', root).replaceAll('${__dirname}', root);
-  const config = process.env.ACTS_TEST_SERVER
-    ? process.env.ACTS_TEST_FORMAT === 'mcpb'
-      ? JSON.parse(await readFile(join(root, 'manifest.json'), 'utf8')).server.mcp_config
-      : JSON.parse(await readFile(join(root, 'mcp.json'), 'utf8')).mcpServers['acts-excel']
+  const config = process.env.ACTS_TEST_CONFIG
+    ? JSON.parse(await readFile(process.env.ACTS_TEST_CONFIG, 'utf8')).mcpServers['acts-excel']
     : undefined;
   const command = config ? expand(config.command) : process.execPath;
   const args = config ? config.args.map(expand) : [serverPath];
   const cwd = config?.cwd ? expand(config.cwd) : undefined;
-  const transport = new StdioClientTransport({ command, args, cwd, env: { PATH: process.env.PATH || '', ACTS_EXCEL_HOME: home }, stderr: 'pipe' });
+  const transport = new StdioClientTransport({ command, args, cwd, env: { PATH: process.env.PATH || '', ACTS_EXCEL_HOME: home, ...(process.env.npm_config_cache ? { npm_config_cache: process.env.npm_config_cache } : {}), ...(process.env.npm_config_offline ? { npm_config_offline: process.env.npm_config_offline } : {}) }, stderr: 'pipe' });
+  let diagnostics = '';
+  transport.stderr?.on('data', chunk => { diagnostics = (diagnostics + chunk).slice(-12000); });
   const client = new Client({ name: 'ACTS integration test', version: '1.0.0' });
-  t.after(() => client.close());
-  await client.connect(transport);
+  t.after(async () => {
+    if (process.platform === 'win32' && command === 'npx' && transport.pid) {
+      try { execFileSync('taskkill', ['/pid', String(transport.pid), '/t', '/f'], { stdio: 'ignore' }); } catch {}
+    }
+    await client.close();
+    await rm(home, { recursive: true, force: true });
+  });
+  try { await client.connect(transport, { timeout: 120000 }); }
+  catch (error) { throw new Error(`${error}\n${diagnostics}`); }
   const tools = await client.listTools();
   assert.equal(tools.tools.length, 8);
   for (const tool of tools.tools) assert.ok((tool._meta?.ui as { resourceUri: string }).resourceUri.startsWith('ui://acts-excel/'));

@@ -2,48 +2,50 @@
 
 A local [Model Context Protocol](https://modelcontextprotocol.io/) server for spreadsheet analysis with DuckDB SQL. Import XLSX, CSV, TSV, Parquet, or JSON; query and transform the data; inspect compact previews; recover complete values; and export results. MCP Apps clients also show an interactive table, chart, and export view. Other stdio MCP clients receive the same tools and text results.
 
-ACTS Excel does not require Microsoft Excel, Python, an API key, or a hosted server. It requires **Node.js 22 or newer** in the desktop client's execution environment. The package includes its JavaScript dependencies, DuckDB native library, and Excel extension. No installation script or first-run download is needed.
+ACTS Excel requires **Node.js 22+ and npm** in the environment where your MCP client runs commands. It does not require Microsoft Excel, Python, an API key, or a hosted server. On Windows, install the [Visual C++ Redistributable](https://learn.microsoft.com/en-us/cpp/windows/latest-supported-vc-redist/) if it is not already present.
 
-On Windows, DuckDB also requires the [Microsoft Visual C++ Redistributable](https://learn.microsoft.com/en-us/cpp/windows/latest-supported-vc-redist/) for the selected architecture, as documented by [DuckDB](https://duckdb.org/docs/current/dev/building/windows). Install it if it is not already present.
+## Install in ChatGPT desktop
 
-## Install
+Download **[ACTS-Excel-0.0.5-chatgpt.zip](https://github.com/Applied-Contexts/ACTS-Excel/releases/download/v0.0.5/ACTS-Excel-0.0.5-chatgpt.zip)** and import it using ChatGPT's plugin ZIP import. Use the plugin in a local task with local execution enabled. The same ZIP works with Windows, macOS, Linux, and WSL; there is no architecture selection.
 
-1. Open [Releases](https://github.com/Applied-Contexts/ACTS-Excel/releases) and select a platform package from version 0.0.4 or newer. Version 0.0.3's universal archive exceeds ChatGPT's 100 MB upload limit.
-2. Choose the target matching the **Node process used by your client**, including its CPU architecture. To check an installed Node runtime, run `node -p "process.platform + '-' + process.arch"` and `node --version`.
-3. Download `ACTS-Excel-VERSION-TARGET-chatgpt.zip` for ChatGPT, or `ACTS-Excel-VERSION-TARGET.mcpb` for Claude Desktop or another MCPB host. The ZIP and MCPB are alternative packages of the same application; install one.
-4. Verify the download against the adjacent `.sha256` file. On Linux use `sha256sum -c FILE.sha256`; on macOS use `shasum -a 256 -c FILE.sha256`; in PowerShell use `Get-FileHash FILE -Algorithm SHA256` and compare the printed hash.
-5. In ChatGPT desktop, use the available plugin ZIP import flow and run the plugin in a local task. In Claude Desktop, open the `.mcpb` file and confirm installation. Local execution must be enabled by the host or workspace. A web/cloud task cannot launch this stdio server on your computer.
-6. Ask: **“Use ACTS Excel to import `/absolute/path/sales.xlsx` and summarize revenue by region.”** On Windows, supply a full path such as `C:\Users\you\Documents\sales.xlsx`.
+The plugin runs `npx` with an exact versioned npm archive hosted in this repository's GitHub release. npm downloads and caches the server and selects DuckDB's native dependency for the actual Node process. The first XLSX operation installs DuckDB's signed Excel extension. Initial setup needs internet access to GitHub, the npm registry, and DuckDB's extension repository. Spreadsheet contents are not sent to these services.
 
-| Computer / runtime | Target |
-| --- | --- |
-| Windows x64 | `win32-x64` |
-| Windows ARM64 with ARM64 Node | `win32-arm64` |
-| Apple silicon with ARM64 Node | `darwin-arm64` |
-| Intel Mac, or x64 Node under Rosetta | `darwin-x64` |
-| Linux x64, glibc (Ubuntu, Debian, Fedora) | `linux-x64` |
-| Linux ARM64, glibc | `linux-arm64` |
-| Linux x64, musl (Alpine) | `linux-x64-musl` |
-| Linux ARM64, musl | `linux-arm64-musl` |
+For an explicit setup check, or a client with a short startup timeout, run this once in the client's execution environment before connecting:
 
-A host may supply its own Node runtime. Its architecture takes precedence over the operating system's architecture. MCPB compatibility metadata distinguishes operating systems, not CPU architectures, so selecting the matching archive matters. Platform assets are built for all eight targets. Builds, tests, and releases run on local or developer-managed machines; this project does not use GitHub CI. Each release states which runtimes were actually execution-tested. An included archive alone does not establish execution coverage.
+```sh
+npx --yes --package=https://github.com/Applied-Contexts/ACTS-Excel/releases/download/v0.0.5/acts-excel-0.0.5.tgz acts-excel --setup
+```
+
+Wait for **“ACTS Excel is ready”**, then reconnect the plugin. This fills npm's cache and installs the Excel extension. If ChatGPT uses WSL, run setup inside WSL and use Linux paths such as `/mnt/c/Users/you/Documents/sales.xlsx`. For native Windows execution, use a path such as `C:\Users\you\Documents\sales.xlsx`.
+
+Ask: **“Use ACTS Excel to import my sales.xlsx file and summarize revenue by region.”** Include its absolute local path. Successful discovery exposes eight tools: `ingest`, `catalog`, `query`, `transform`, `read_result`, `read_cell`, `export`, and `forget`.
 
 ### Other MCP clients
 
-Extract the matching ChatGPT ZIP into a permanent directory and configure the client's stdio server entry. Replace the sample path with the absolute path on your machine; use an absolute Node executable path if the client cannot find `node` on its PATH.
+Use the same npm command in your client's stdio configuration:
 
 ```json
 {
   "mcpServers": {
     "acts-excel": {
-      "command": "node",
-      "args": ["/absolute/path/acts-excel/dist/server.mjs"]
+      "command": "npx",
+      "args": [
+        "--yes",
+        "--package=https://github.com/Applied-Contexts/ACTS-Excel/releases/download/v0.0.5/acts-excel-0.0.5.tgz",
+        "acts-excel"
+      ]
     }
   }
 }
 ```
 
-On Windows, JSON paths need escaped backslashes, for example `C:\\Tools\\acts-excel\\dist\\server.mjs`. Restart or reconnect the MCP client after configuration. Successful discovery exposes eight tools: `ingest`, `catalog`, `query`, `transform`, `read_result`, `read_cell`, `export`, and `forget`.
+On Windows, a client that cannot resolve npm's `.cmd` launcher needs `"command": "cmd"` and `"/c", "npx"` prepended to the argument list. ChatGPT/Codex's Windows resolver handles `npx` itself. Restart or reconnect after configuration. MCP Apps support adds interactive tables and charts; other clients receive the same tools and text results.
+
+### Release files and upgrades
+
+Each release contains one small ChatGPT plugin ZIP, one npm `.tgz` runtime package, and their SHA-256 files. Import the **plugin ZIP** into ChatGPT. The `.tgz` is fetched by npm; GitHub's generated source ZIP is for source development. Starting with 0.0.5, use standard stdio configuration for other clients instead of the old platform-specific MCPB packages.
+
+To upgrade, import the new plugin ZIP or update the versioned URL in your MCP configuration. There is no mutable `latest` dependency. Downloads can be checked against the adjacent `.sha256` file with `sha256sum`, `shasum -a 256`, or PowerShell's `Get-FileHash -Algorithm SHA256`.
 
 ## Use and data storage
 
@@ -59,13 +61,13 @@ Imported data and complete query results persist locally in `workspace.duckdb`. 
 
 Set `ACTS_EXCEL_HOME` in the MCP server's environment to use another absolute directory. Use a separate directory for each concurrently running server process: DuckDB does not support independent writer processes sharing this database. Upgrades and plugin removal do not delete this data directory. Back it up or remove it explicitly while the server is stopped.
 
-ACTS Excel does not upload spreadsheets or contact a service during analysis. Tool results are sent to the MCP client, whose own model and data policies apply. SQL queries cannot directly read external files, access the network, change configuration, or execute multiple statements; `ingest` and `export` are the file boundaries. Run the server with the permissions needed for your chosen files.
+ACTS Excel does not upload spreadsheets. Dependency downloads occur during initial setup; subsequent operations reuse the installed native library and Excel extension. Tool results are sent to the MCP client, whose own model and data policies apply. SQL queries cannot directly read external files, access the network, change configuration, or execute multiple statements; `ingest` and `export` are the file boundaries. Run the server with the permissions needed for your chosen files.
 
 XLSX formulas use their cached values; ACTS Excel does not recalculate formulas. XLSX exports contain data, not the original workbook formatting. Save legacy XLS/XLSB as XLSX first. For preserving exact database types, export Parquet.
 
 ## Build from source
 
-Prerequisites: Git, Node.js 22+, npm, and `tar` on PATH. Initial installation/build needs access to npm, the DuckDB extension host, and GitHub for third-party notices. No credentials are required for public dependencies.
+Prerequisites: Git, Node.js 22+, and npm. No private registry credentials are needed.
 
 ```sh
 git clone https://github.com/Applied-Contexts/ACTS-Excel.git
@@ -77,34 +79,28 @@ npm test
 npm start
 ```
 
-`npm run build` builds for the current machine. `npm start` runs a stdio MCP server and waits for protocol input; silence in a terminal is normal. Point your MCP client at the built `dist/server.mjs` using the configuration above. You can edit TypeScript and rebuild without reinstalling the plugin.
+`npm start` runs a stdio MCP server and waits for protocol input; silence in a terminal is normal. For local development, configure your MCP client with `node /absolute/path/ACTS-Excel/dist/server.mjs`. Rebuild and reconnect after source changes.
 
-```sh
-npm run bundle -- --target linux-x64
-npm run test:package
-```
-
-This produces the two package formats and checksums under `release/`, verifies their contents and sizes, and exercises extracted packages matching the current runtime through an MCP client. To build every release target, use `npm run bundle`. `npm run build -- --all` builds all binaries without packaging.
-
-See [CONTRIBUTING.md](https://github.com/Applied-Contexts/ACTS-Excel/blob/main/CONTRIBUTING.md) for the code layout, extension points, UI tests, and release process.
+See [CONTRIBUTING.md](CONTRIBUTING.md) for the code layout, tests, local release process, and fork instructions. All builds and releases run locally or on developer-managed machines. **This repository does not use GitHub CI.**
 
 ## Troubleshooting
 
-- **`node` not found or tools do not appear:** check the desktop client's Node runtime and PATH, use Node 22+, and inspect its MCP stderr log. Shell PATH and desktop application PATH can differ.
-- **Native module / architecture error:** select the archive matching the client's Node architecture and Linux libc. Re-extract the complete archive; do not move `server.mjs` away from its `native/`, `extensions/`, and `app.html` siblings.
-- **ChatGPT rejects a large archive:** use a platform-specific `-chatgpt.zip` from 0.0.4 or later, not the 0.0.3 universal archive, an MCPB file, or GitHub's source-code ZIP.
+- **Tools do not appear:** run the setup command in the client's execution environment. Check `node --version`, `npm --version`, and the client's MCP stderr log. A desktop application may use a different PATH or WSL environment from your terminal.
+- **Startup timeout:** complete the explicit setup command, then reconnect. The first npm install needs more time on a slow connection. Clients that support a configurable MCP startup timeout can increase it.
+- **ChatGPT rejects the upload:** check that the selected file is `ACTS-Excel-VERSION-chatgpt.zip`. Archive import and MCP startup are separate steps; “Couldn't add plugin” alone does not identify a dependency or native-library error. A release's validation notes state which host import paths were tested.
 - **Database locked:** stop other ACTS Excel processes or give each client a separate `ACTS_EXCEL_HOME`.
-- **File not found:** supply a local absolute path readable by the server. A cloud attachment is not automatically a local filesystem path.
-- **No interactive view:** MCP Apps support is host-specific; the tools remain usable through text results.
+- **File not found:** supply an absolute path readable in the server's environment. A cloud attachment is not automatically a local file, and native Windows and WSL use different paths.
 
-## Why platform packages?
+## Packaging design
 
-Version 0.0.3 bundled eight native DuckDB builds and eight Excel extensions in a single 231 MB ZIP. Each installation needs one pair. Separate platform archives keep the existing runtime self-contained and below a strict **100,000,000-byte** packaging gate. They avoid an additional downloader, mutable “latest” resolution, cache repair, startup timeouts, and first-use network access.
+The plugin is configuration; the server is an ordinary npm package with an `acts-excel` executable. The package is built once and attached to a versioned GitHub release. npm installs the platform dependency from DuckDB's optional dependencies, and DuckDB installs and verifies its own version-matched Excel extension. There is no custom binary downloader or plugin post-install hook.
 
-This choice follows OpenAI's [desktop plugin packaging guidance](https://developers.openai.com/plugins/deploy/desktop-only), MCPB's [dependency bundling guidance](https://github.com/modelcontextprotocol/mcpb#bundling-dependencies), and the platform release approach used by [GitHub's MCP server](https://github.com/github/github-mcp-server) and [Grafana's MCP server](https://github.com/grafana/mcp-grafana). [Playwright MCP](https://github.com/microsoft/playwright-mcp) offers another established model using an npm launcher; ACTS Excel currently distributes built archives and does not require runtime npm access. There is no universal post-install hook shared by these hosts.
+This follows the npm launch pattern used by the [MCP filesystem reference server](https://github.com/modelcontextprotocol/servers/tree/main/src/filesystem) and the [Playwright plugin](https://github.com/anthropics/claude-plugins-official/blob/main/external_plugins/playwright/.mcp.json). Platform selection is implemented by [DuckDB's Node bindings](https://github.com/duckdb/duckdb-node-neo/blob/main/bindings/pkgs/%40duckdb/node-bindings/duckdb.js). MCP itself supplies process transport, not package installation.
 
-Public OpenAI directory distribution has additional eligibility and review requirements; a working local package is not a claim of public-directory approval.
+npm stores runtime packages in its normal cache; Excel extensions are cached under `ACTS_EXCEL_HOME/extensions` (or the default data directory above). Keep those caches for reuse. Removing or upgrading a plugin does not remove your stored spreadsheets or results.
+
+Public directory submission has separate review requirements; this repository's downloadable plugin is not a claim of directory approval.
 
 ## License
 
-[MIT](LICENSE). Bundled third-party components retain their own licenses, included under `dist/notices/` and the native library directory in release packages.
+[MIT](LICENSE). Bundled JavaScript license notices are included in `dist/notices/`. npm dependencies and DuckDB extensions retain their own licenses.

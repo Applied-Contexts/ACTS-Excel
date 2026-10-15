@@ -1,7 +1,7 @@
 {
   "$schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
   "name": "acts-excel",
-  "version": "0.0.4",
+  "version": "0.0.5",
   "description": "Analyze local spreadsheets with SQL and compact, recoverable results.",
   "author": {
     "name": "Applied Contexts"
