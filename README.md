@@ -8,7 +8,7 @@ ACTS Excel requires **Node.js 22+ and npm** in the environment where your MCP cl
 
 Download **[ACTS-Excel-0.0.5-chatgpt.zip](https://github.com/Applied-Contexts/ACTS-Excel/releases/download/v0.0.5/ACTS-Excel-0.0.5-chatgpt.zip)** and import it using ChatGPT's plugin ZIP import. Use the plugin in a local task with local execution enabled. The same ZIP works with Windows, macOS, Linux, and WSL; there is no architecture selection.
 
-The plugin runs `npx` with an exact versioned npm archive hosted in this repository's GitHub release. npm downloads and caches the server and selects DuckDB's native dependency for the actual Node process. The first XLSX operation installs DuckDB's signed Excel extension. Initial setup needs internet access to GitHub, the npm registry, and DuckDB's extension repository. Spreadsheet contents are not sent to these services.
+The plugin runs `npx` with an exact versioned npm archive hosted in this repository's GitHub release. npm downloads and caches the server and selects DuckDB's native dependency for the actual Node process. The first XLSX operation installs DuckDB's signed Excel extension. Initial setup needs internet access to GitHub, the npm registry, and DuckDB's extension repository. Subsequent starts still need access to GitHub because npm resolves the tarball URL even with a populated cache; this launcher does not promise offline startup. Spreadsheet contents are not sent to these services.
 
 For an explicit setup check, or a client with a short startup timeout, run this once in the client's execution environment before connecting:
 
