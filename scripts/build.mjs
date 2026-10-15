@@ -5,13 +5,25 @@ import { execFileSync } from 'node:child_process';
 import { gunzipSync } from 'node:zlib';
 import { join, resolve } from 'node:path';
 import { DuckDBInstance } from '@duckdb/node-api';
+import { parseArgs } from 'node:util';
+import { targets, validateTarget } from './targets.mjs';
 
+const { values } = parseArgs({ options: { all: { type: 'boolean' }, target: { type: 'string' } } });
+if (values.all && values.target) throw new Error('Use --all or --target, not both');
+if (values.target) validateTarget(values.target);
+const app = JSON.parse(await readFile('package.json', 'utf8'));
 const lock = JSON.parse(await readFile('package-lock.json', 'utf8'));
-const bindings = Object.entries(lock.packages).filter(([name]) => name.startsWith('node_modules/@duckdb/node-bindings-'));
 const db = await DuckDBInstance.create(':memory:');
 const connection = await db.connect();
 const version = (await connection.runAndReadAll('SELECT version()')).getRowsJson()[0][0];
 const platform = (await connection.runAndReadAll('PRAGMA platform')).getRowsJson()[0][0];
+const selected = values.all ? Object.keys(targets) : [validateTarget(values.target || Object.keys(targets).find(target => targets[target] === platform))];
+const bindings = selected.map(target => {
+  const name = `node_modules/@duckdb/node-bindings-${target}`;
+  const pkg = lock.packages[name];
+  if (!pkg?.resolved || !pkg.integrity) throw new Error(`Missing locked native dependency: ${name}`);
+  return [name, pkg];
+});
 await rm('dist', { recursive: true, force: true });
 await mkdir('dist', { recursive: true });
 await mkdir('.stage/downloads', { recursive: true });
@@ -45,7 +57,7 @@ await Promise.all(bindings.map(async ([name, pkg]) => {
   for (const file of await readdir(native)) {
     if (!/\.(node|dll|so|dylib)$/.test(file) && file !== 'LICENSE') await rm(join(native, file));
   }
-  const extensionPlatform = target.replace('win32', 'windows').replace('darwin', 'osx').replace('x64', 'amd64').replaceAll('-', '_');
+  const extensionPlatform = targets[target];
   const extensionDir = join('dist/extensions', extensionPlatform);
   const extension = await download(`https://extensions.duckdb.org/${version}/${extensionPlatform}/excel.duckdb_extension.gz`, `.stage/downloads/excel-${version}-${extensionPlatform}.gz`);
   await mkdir(extensionDir, { recursive: true });
@@ -60,6 +72,7 @@ const server = await build({
   } }],
 });
 await writeFile('dist/build-meta.json', JSON.stringify(server.metafile, null, 2));
+await writeFile('dist/build-info.json', JSON.stringify({ version: app.version, duckdb_version: version, targets: selected }, null, 2));
 const packages = new Set(Object.keys(server.metafile.inputs).flatMap(path => {
   const marker = path.lastIndexOf('node_modules/');
   if (marker < 0) return [];
@@ -79,6 +92,6 @@ const ui = await build({ entryPoints: ['ui/app.ts'], bundle: true, platform: 'br
 const template = await readFile('ui/index.html', 'utf8');
 const css = await readFile('ui/style.css', 'utf8');
 await writeFile('dist/app.html', template.replace('STYLE_CONTENT', () => css).replace('SCRIPT_CONTENT', () => ui.outputFiles[0].text.replaceAll('</script', '<\\/script')));
-await connection.run(`LOAD '${resolve(`dist/extensions/${platform}/excel.duckdb_extension`).replaceAll("'", "''").replaceAll('\\', '/')}'`);
+if (selected.some(target => targets[target] === platform)) await connection.run(`LOAD '${resolve(`dist/extensions/${platform}/excel.duckdb_extension`).replaceAll("'", "''").replaceAll('\\', '/')}'`);
 connection.closeSync(); db.closeSync();
-console.log(`Built one Node 22 JavaScript bundle with ${bindings.length} DuckDB platform/architecture variants and offline Excel extensions.`);
+console.log(`Built ACTS-Excel ${app.version} for ${selected.join(', ')} with offline Excel extensions.`);
