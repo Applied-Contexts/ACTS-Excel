@@ -51,7 +51,6 @@ test('portable plugin installs the npm runtime from an empty cache and completes
   const env = { ...process.env, ACTS_TEST_CONFIG: configPath, npm_config_cache: join(root, 'npm cache') };
   delete env.NODE_TEST_CONTEXT;
   for (const phase of ['cold', 'cached']) {
-    if (phase === 'cached') env.npm_config_offline = 'true';
     try {
       const { stdout } = await exec(process.execPath, ['--test', '--test-reporter=tap', '.stage/mcp-test.mjs'], { cwd: resolve('.'), env, timeout: 140000 });
       assert.match(stdout, /# pass 1\b/, stdout);

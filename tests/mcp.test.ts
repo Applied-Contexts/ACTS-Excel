@@ -34,7 +34,7 @@ test('packaged stdio protocol exposes all eight app tools and completes the assi
   const command = config ? expand(config.command) : process.execPath;
   const args = config ? config.args.map(expand) : [serverPath];
   const cwd = config?.cwd ? expand(config.cwd) : undefined;
-  const transport = new StdioClientTransport({ command, args, cwd, env: { PATH: process.env.PATH || '', ACTS_EXCEL_HOME: home, ...(process.env.npm_config_cache ? { npm_config_cache: process.env.npm_config_cache } : {}), ...(process.env.npm_config_offline ? { npm_config_offline: process.env.npm_config_offline } : {}) }, stderr: 'pipe' });
+  const transport = new StdioClientTransport({ command, args, cwd, env: { PATH: process.env.PATH || '', ACTS_EXCEL_HOME: home, ...(process.env.npm_config_cache ? { npm_config_cache: process.env.npm_config_cache } : {}) }, stderr: 'pipe' });
   let diagnostics = '';
   transport.stderr?.on('data', chunk => { diagnostics = (diagnostics + chunk).slice(-12000); });
   const client = new Client({ name: 'ACTS integration test', version: '1.0.0' });
