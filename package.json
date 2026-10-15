@@ -1,6 +1,6 @@
 {
   "name": "acts-excel",
-  "version": "0.0.3",
+  "version": "0.0.4",
   "private": true,
   "type": "module",
   "description": "Local spreadsheet analysis with SQL, recoverable previews, and interactive MCP tool faces",
@@ -15,7 +15,8 @@
     "test": "node --import tsx --test tests/*.test.ts tests/*.test.mjs",
     "start": "node dist/server.mjs",
     "bundle": "node scripts/package.mjs",
-    "test:ui": "playwright test"
+    "test:ui": "playwright test",
+    "test:package": "node --test tests/release.check.mjs"
   },
   "dependencies": {
     "@duckdb/node-api": "1.5.6-r.1",
@@ -38,5 +39,6 @@
   "overrides": {
     "tmp": "^0.2.5",
     "node-forge": "1.4.0"
-  }
+  },
+  "license": "MIT"
 }

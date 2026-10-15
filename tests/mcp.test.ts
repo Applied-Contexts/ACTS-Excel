@@ -27,11 +27,15 @@ test('packaged stdio protocol exposes all eight app tools and completes the assi
   t.after(() => rm(home, { recursive: true, force: true }));
   const serverPath = resolve(process.env.ACTS_TEST_SERVER || 'dist/server.mjs');
   const root = resolve(dirname(serverPath), '..');
-  const expand = (value: string) => value.replaceAll('${PLUGIN_ROOT}', root);
-  const config = process.env.ACTS_TEST_SERVER ? JSON.parse(await readFile(join(root, 'mcp.json'), 'utf8')).mcpServers['acts-excel'] : undefined;
+  const expand = (value: string) => value.replaceAll('${PLUGIN_ROOT}', root).replaceAll('${__dirname}', root);
+  const config = process.env.ACTS_TEST_SERVER
+    ? process.env.ACTS_TEST_FORMAT === 'mcpb'
+      ? JSON.parse(await readFile(join(root, 'manifest.json'), 'utf8')).server.mcp_config
+      : JSON.parse(await readFile(join(root, 'mcp.json'), 'utf8')).mcpServers['acts-excel']
+    : undefined;
   const command = config ? expand(config.command) : process.execPath;
   const args = config ? config.args.map(expand) : [serverPath];
-  const cwd = config ? expand(config.cwd) : undefined;
+  const cwd = config?.cwd ? expand(config.cwd) : undefined;
   const transport = new StdioClientTransport({ command, args, cwd, env: { PATH: process.env.PATH || '', ACTS_EXCEL_HOME: home }, stderr: 'pipe' });
   const client = new Client({ name: 'ACTS integration test', version: '1.0.0' });
   t.after(() => client.close());

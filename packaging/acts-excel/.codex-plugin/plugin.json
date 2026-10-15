@@ -1,6 +1,6 @@
 {
   "name": "acts-excel",
-  "version": "0.0.3",
+  "version": "0.0.4",
   "description": "Analyze local spreadsheets with SQL and compact, recoverable results.",
   "author": {
     "name": "Applied Contexts"
@@ -30,5 +30,6 @@
       "Analyze an Excel file on my computer.",
       "Clean a spreadsheet and export the result."
     ]
-  }
+  },
+  "license": "MIT"
 }
