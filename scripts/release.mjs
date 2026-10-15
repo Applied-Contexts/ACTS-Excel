@@ -38,7 +38,8 @@ for (const target of Object.keys(targets)) {
 }
 const gh = args => execFileSync('gh', args, { encoding: 'utf8' });
 gh(['release', 'create', tag, '--repo', repo, '--verify-tag', '--draft', '--title', `ACTS Excel ${pkg.version}`, '--notes-file', values['notes-file'], ...(values.prerelease ? ['--prerelease'] : []), ...assets]);
-const uploaded = JSON.parse(gh(['api', `repos/${repo}/releases/tags/${tag}`]));
+const { apiUrl } = JSON.parse(gh(['release', 'view', tag, '--repo', repo, '--json', 'apiUrl']));
+const uploaded = JSON.parse(gh(['api', apiUrl]));
 if (uploaded.assets.length !== expected.size) throw new Error('Uploaded asset count differs; release remains a draft');
 for (const asset of uploaded.assets) {
   const file = expected.get(asset.name);
