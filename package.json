@@ -1,6 +1,6 @@
 {
   "name": "acts-excel",
-  "version": "0.0.5",
+  "version": "0.0.6",
   "private": true,
   "type": "module",
   "description": "Local spreadsheet analysis with SQL, recoverable previews, and interactive MCP tool faces",

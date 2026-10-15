@@ -1,7 +1,6 @@
 import { readFile, writeFile, mkdtemp, mkdir, rm } from 'node:fs/promises';
 import { join, dirname } from 'node:path';
 import { tmpdir } from 'node:os';
-import { createServer } from 'node:http';
 import { spawn } from 'node:child_process';
 import { createInterface } from 'node:readline';
 import assert from 'node:assert/strict';
@@ -10,10 +9,6 @@ import { unzipSync } from 'fflate';
 const pkg = JSON.parse(await readFile('package.json', 'utf8'));
 const root = await mkdtemp(join(tmpdir(), 'acts-host-check-'));
 const market = 'acts-excel-verify-' + Date.now();
-const runtime = `${pkg.name}-${pkg.version}.tgz`;
-const bytes = await readFile(join('release', runtime));
-const http = createServer((request, response) => response.end(bytes));
-await new Promise(resolve => http.listen(0, '127.0.0.1', resolve));
 const pluginRoot = join(root, 'acts-excel');
 const files = unzipSync(await readFile(join('release', `ACTS-Excel-${pkg.version}-chatgpt.zip`)));
 for (const [name, bytes] of Object.entries(files)) {
@@ -24,7 +19,6 @@ for (const [name, bytes] of Object.entries(files)) {
 for (const file of ['mcp.json', '.mcp.json']) {
   const config = JSON.parse(await readFile(join(pluginRoot, file), 'utf8'));
   const server = config.mcpServers['acts-excel'];
-  if (!process.env.ACTS_TEST_PUBLISHED) server.args[1] = `--package=http://127.0.0.1:${http.address().port}/${runtime}`;
   server.env = { npm_config_cache: join(root, 'npm-cache'), ACTS_EXCEL_HOME: join(root, 'data') };
   await writeFile(join(pluginRoot, file), JSON.stringify(config));
 }
@@ -79,8 +73,6 @@ try {
   } finally {
     for (const request of pending.values()) clearTimeout(request.timer);
     if (child.exitCode === null) await new Promise(resolve => { child.once('close', resolve); child.kill(); });
-    http.closeAllConnections();
-    await new Promise(resolve => http.close(resolve));
     if (!installed || uninstalled) await rm(root, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 });
     else console.error(`Test plugin remains installed from ${root}`);
   }

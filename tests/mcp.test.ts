@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js';
-import { mkdtemp, rm, writeFile, readFile, symlink } from 'node:fs/promises';
+import { mkdtemp, rm, writeFile, readFile, symlink, readdir } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join, resolve, dirname, toNamespacedPath } from 'node:path';
 import { META_KEY } from '../src/reply.js';
@@ -26,15 +26,16 @@ test('stdio discovery works through host-normalized entrypoint paths', { timeout
 test('packaged stdio protocol exposes all eight app tools and completes the assistant workflow', { timeout: 180000 }, async t => {
   const home = await mkdtemp(join(tmpdir(), 'acts-mcp-'));
   const serverPath = resolve(process.env.ACTS_TEST_SERVER || 'dist/server.mjs');
-  const root = resolve(dirname(serverPath), '..');
+  const root = process.env.ACTS_TEST_CONFIG ? dirname(resolve(process.env.ACTS_TEST_CONFIG)) : resolve(dirname(serverPath), '..');
   const expand = (value: string) => value.replaceAll('${PLUGIN_ROOT}', root).replaceAll('${__dirname}', root);
   const config = process.env.ACTS_TEST_CONFIG
     ? JSON.parse(await readFile(process.env.ACTS_TEST_CONFIG, 'utf8')).mcpServers['acts-excel']
     : undefined;
-  const command = config ? expand(config.command) : process.execPath;
+  const command = config && !process.env.ACTS_TEST_NO_NPM ? expand(config.command) : process.execPath;
   const args = config ? config.args.map(expand) : [serverPath];
   const cwd = config?.cwd ? expand(config.cwd) : undefined;
-  const transport = new StdioClientTransport({ command, args, cwd, env: { PATH: process.env.PATH || '', ACTS_EXCEL_HOME: home, ...(process.env.npm_config_cache ? { npm_config_cache: process.env.npm_config_cache } : {}) }, stderr: 'pipe' });
+  const runtimeHome = process.env.ACTS_TEST_RUNTIME_HOME || join(home, 'runtime');
+  const transport = new StdioClientTransport({ command, args, cwd, env: { PATH: process.env.ACTS_TEST_NO_NPM ? join(home, 'no-executables') : process.env.PATH || '', ACTS_EXCEL_HOME: home, ACTS_EXCEL_RUNTIME_HOME: runtimeHome, ...(process.env.npm_config_cache ? { npm_config_cache: process.env.npm_config_cache } : {}), ...(process.env.npm_config_offline ? { npm_config_offline: process.env.npm_config_offline } : {}) }, stderr: 'pipe' });
   let diagnostics = '';
   transport.stderr?.on('data', chunk => { diagnostics = (diagnostics + chunk).slice(-12000); });
   const client = new Client({ name: 'ACTS integration test', version: '1.0.0' });
@@ -45,15 +46,27 @@ test('packaged stdio protocol exposes all eight app tools and completes the assi
     await client.close();
     await rm(home, { recursive: true, force: true });
   });
-  try { await client.connect(transport, { timeout: 120000 }); }
+  const runtimeBefore = await readdir(runtimeHome).catch(() => []);
+  const started = Date.now();
+  try { await client.connect(transport, { timeout: 10000 }); }
   catch (error) { throw new Error(`${error}\n${diagnostics}`); }
   const tools = await client.listTools();
+  t.diagnostic(`MCP discovery completed in ${Date.now() - started} ms before dependency setup`);
+  assert.ok(Date.now() - started < 10000, 'MCP initialization must not wait for native dependency setup');
+  if (config?.args.includes('--plugin')) assert.deepEqual(await readdir(runtimeHome).catch(() => []), runtimeBefore, 'Discovery must not install dependencies');
   assert.equal(tools.tools.length, 8);
   for (const tool of tools.tools) assert.ok((tool._meta?.ui as { resourceUri: string }).resourceUri.startsWith('ui://acts-excel/'));
   const resources = await client.listResources();
   const resource = await client.readResource({ uri: resources.resources[0].uri });
   assert.equal(resource.contents[0].mimeType, 'text/html;profile=mcp-app');
   assert.match(String('text' in resource.contents[0] ? resource.contents[0].text : ''), /ACTS Excel/);
+  if (process.env.ACTS_TEST_NO_NPM) {
+    const result = await client.callTool({ name: 'catalog', arguments: {} });
+    assert.equal(result.isError, true);
+    assert.match(JSON.stringify(result.content), /npm.*retry|retry.*npm/i);
+    assert.equal((await client.listTools()).tools.length, 8);
+    return;
+  }
   const path = join(home, 'input.csv'); await writeFile(path, 'name,amount\nA,10\nB,20\n');
   const invoke = async (name: string, args: Record<string, unknown>) => {
     const result = await client.callTool({ name, arguments: args }, undefined, { timeout: 120000 });

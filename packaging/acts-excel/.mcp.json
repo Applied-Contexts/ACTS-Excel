@@ -2,11 +2,10 @@
   "mcpServers": {
     "acts-excel": {
       "type": "stdio",
-      "command": "npx",
+      "command": "node",
       "args": [
-        "--yes",
-        "--package=https://github.com/Applied-Contexts/ACTS-Excel/releases/download/v0.0.5/acts-excel-0.0.5.tgz",
-        "acts-excel"
+        "${PLUGIN_ROOT}/dist/server.mjs",
+        "--plugin"
       ],
       "cwd": "${PLUGIN_ROOT}"
     }
