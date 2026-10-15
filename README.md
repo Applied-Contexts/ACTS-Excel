@@ -26,7 +26,7 @@ On Windows, DuckDB also requires the [Microsoft Visual C++ Redistributable](http
 | Linux x64, musl (Alpine) | `linux-x64-musl` |
 | Linux ARM64, musl | `linux-arm64-musl` |
 
-A host may supply its own Node runtime. Its architecture takes precedence over the operating system's architecture. MCPB compatibility metadata distinguishes operating systems, not CPU architectures, so selecting the matching archive matters. Platform assets are built for all eight targets; executable CI coverage is recorded in [the build workflow](https://github.com/Applied-Contexts/ACTS-Excel/blob/main/.github/workflows/ci.yml), not inferred from the presence of an archive.
+A host may supply its own Node runtime. Its architecture takes precedence over the operating system's architecture. MCPB compatibility metadata distinguishes operating systems, not CPU architectures, so selecting the matching archive matters. Platform assets are built for all eight targets. Builds, tests, and releases run on local or developer-managed machines; this project does not use GitHub CI. Each release states which runtimes were actually execution-tested. An included archive alone does not establish execution coverage.
 
 ### Other MCP clients
 
