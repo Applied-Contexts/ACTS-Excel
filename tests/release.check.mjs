@@ -3,64 +3,59 @@ import assert from 'node:assert/strict';
 import { readFile, writeFile, mkdtemp, mkdir, rm } from 'node:fs/promises';
 import { dirname, join, resolve } from 'node:path';
 import { tmpdir } from 'node:os';
-import { execFileSync } from 'node:child_process';
+import { execFile } from 'node:child_process';
+import { promisify } from 'node:util';
 import { createHash } from 'node:crypto';
+import { createServer } from 'node:http';
 import { unzipSync } from 'fflate';
-import { DuckDBInstance } from '@duckdb/node-api';
-import { targets, archiveLimit } from '../scripts/targets.mjs';
 
+const exec = promisify(execFile);
 const pkg = JSON.parse(await readFile('package.json', 'utf8'));
-const info = JSON.parse(await readFile('dist/build-info.json', 'utf8'));
-const db = await DuckDBInstance.create(':memory:');
-const connection = await db.connect();
-const platform = (await connection.runAndReadAll('PRAGMA platform')).getRowsJson()[0][0];
-connection.closeSync();
-db.closeSync();
+const runtime = `${pkg.name}-${pkg.version}.tgz`;
+const plugin = `ACTS-Excel-${pkg.version}-chatgpt.zip`;
 
-for (const target of info.targets) {
-  for (const suffix of ['-chatgpt.zip', '.mcpb']) {
-    const filename = `ACTS-Excel-${pkg.version}-${target}${suffix}`;
-    test(`${filename} is bounded, self-contained and contains only ${target}`, { timeout: 180000 }, async t => {
-      const bytes = await readFile(join('release', filename));
-      assert.ok(bytes.length < archiveLimit, `${bytes.length} bytes exceeds archive limit`);
-      const checksum = createHash('sha256').update(bytes).digest('hex');
-      assert.equal(await readFile(join('release', `${filename}.sha256`), 'utf8'), `${checksum}  ${filename}\n`);
-      const files = unzipSync(bytes);
-      const names = Object.keys(files).filter(name => !name.endsWith('/'));
-      assert.deepEqual([...new Set(names.filter(name => name.startsWith('dist/native/')).map(name => name.split('/')[2]))], [target]);
-      assert.deepEqual([...new Set(names.filter(name => name.startsWith('dist/extensions/')).map(name => name.split('/')[2]))], [targets[target]]);
-      for (const name of ['dist/server.mjs', 'dist/app.html', 'dist/build-info.json', 'README.md', 'LICENSE', `dist/native/${target}/duckdb.node`, `dist/extensions/${targets[target]}/excel.duckdb_extension`]) assert.ok(files[name]?.length, name);
-      assert.ok(names.some(name => name.startsWith('dist/notices/')));
-      assert.ok(!names.some(name => /(^|\/)(node_modules|\.git|\.env|build-meta.json)(\/|$)/.test(name)));
-      const json = name => JSON.parse(Buffer.from(files[name]).toString('utf8'));
-      for (const name of ['plugin.json', '.codex-plugin/plugin.json', 'dist/build-info.json']) assert.equal(json(name).version, pkg.version);
-      assert.deepEqual(json('dist/build-info.json').targets, [target]);
-      assert.match(json('dist/build-info.json').source_commit, /^[a-f0-9]{40}$/);
-      const portable = json('mcp.json').mcpServers['acts-excel'];
-      assert.deepEqual(portable, { type: 'stdio', command: 'node', args: ['${PLUGIN_ROOT}/dist/server.mjs'], cwd: '${PLUGIN_ROOT}' });
-      if (suffix === '.mcpb') {
-        assert.equal(json('manifest.json').version, pkg.version);
-        assert.deepEqual(json('manifest.json').compatibility.platforms, [target.split('-')[0]]);
-      } else assert.equal(files['manifest.json'], undefined);
-      if (targets[target] !== platform) return;
-      const extracted = await mkdtemp(join(tmpdir(), 'acts-package with spaces-'));
-      t.after(() => rm(extracted, { recursive: true, force: true }));
-      for (const name of names) {
-        assert.ok(!name.startsWith('/') && !name.split('/').includes('..'));
-        const path = join(extracted, name);
-        await mkdir(dirname(path), { recursive: true });
-        await writeFile(path, files[name]);
-      }
-      const env = { ...process.env, ACTS_TEST_SERVER: join(extracted, 'dist/server.mjs'), ACTS_TEST_FORMAT: suffix === '.mcpb' ? 'mcpb' : 'chatgpt' };
-      delete env.NODE_TEST_CONTEXT;
-      try {
-        const output = execFileSync(process.execPath, ['--import', 'tsx', '--test', '--test-reporter=tap', 'tests/mcp.test.ts'], {
-          cwd: resolve('.'), env, timeout: 150000, encoding: 'utf8',
-        });
-        assert.match(output, /# pass 2\b/, output);
-      } catch (error) {
-        assert.fail(`${error.message}\n${error.stdout || ''}\n${error.stderr || ''}`);
-      }
-    });
+test('portable plugin installs the npm runtime from an empty cache and completes MCP workflows', { timeout: 300000 }, async t => {
+  for (const name of [runtime, plugin]) {
+    const bytes = await readFile(join('release', name));
+    assert.ok(bytes.length < 100_000_000);
+    assert.equal(await readFile(join('release', name + '.sha256'), 'utf8'), `${createHash('sha256').update(bytes).digest('hex')}  ${name}\n`);
   }
-}
+  const files = unzipSync(await readFile(join('release', plugin)));
+  assert.deepEqual(Object.keys(files).sort(), ['.codex-plugin/plugin.json', '.mcp.json', 'LICENSE', 'README.md', 'build-info.json', 'mcp.json', 'plugin.json']);
+  const json = name => JSON.parse(Buffer.from(files[name]).toString('utf8'));
+  for (const name of ['plugin.json', '.codex-plugin/plugin.json', 'build-info.json']) assert.equal(json(name).version, pkg.version);
+  const config = json('mcp.json');
+  const server = config.mcpServers['acts-excel'];
+  assert.equal(server.command, 'npx');
+  assert.deepEqual(server.args, ['--yes', `--package=${pkg.repository}/releases/download/v${pkg.version}/${runtime}`, 'acts-excel']);
+  assert.deepEqual(json('.mcp.json').mcpServers, config.mcpServers);
+  const root = await mkdtemp(join(tmpdir(), 'acts package with spaces-'));
+  t.after(() => rm(root, { recursive: true, force: true }));
+  for (const [name, bytes] of Object.entries(files)) {
+    const path = join(root, name);
+    await mkdir(dirname(path), { recursive: true });
+    await writeFile(path, bytes);
+  }
+  const archive = await readFile(join('release', runtime));
+  const http = createServer((request, response) => {
+    if (request.url !== '/' + runtime) { response.writeHead(404); response.end(); return; }
+    response.setHeader('Content-Type', 'application/octet-stream');
+    response.end(archive);
+  });
+  await new Promise(resolve => http.listen(0, '127.0.0.1', resolve));
+  t.after(() => { http.closeAllConnections(); return new Promise(resolve => http.close(resolve)); });
+  if (!process.env.ACTS_TEST_PUBLISHED) server.args[1] = `--package=http://127.0.0.1:${http.address().port}/${runtime}`;
+  server.cwd = root;
+  const configPath = join(root, 'mcp.json');
+  await writeFile(configPath, JSON.stringify(config));
+  const env = { ...process.env, ACTS_TEST_CONFIG: configPath, npm_config_cache: join(root, 'npm cache') };
+  delete env.NODE_TEST_CONTEXT;
+  for (const phase of ['cold', 'cached']) {
+    if (phase === 'cached') env.npm_config_offline = 'true';
+    try {
+      const { stdout } = await exec(process.execPath, ['--test', '--test-reporter=tap', '.stage/mcp-test.mjs'], { cwd: resolve('.'), env, timeout: 140000 });
+      assert.match(stdout, /# pass 1\b/, stdout);
+      t.diagnostic(`${phase}: native runtime installation, eight tools, CSV/SQL, XLSX export passed`);
+    } catch (error) { assert.fail(`${phase}: ${error.message}\n${error.stdout || ''}\n${error.stderr || ''}`); }
+  }
+});

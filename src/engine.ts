@@ -4,7 +4,6 @@ import { createReadStream } from 'node:fs';
 import { mkdir, realpath, stat, link, unlink, mkdtemp, rm, copyFile } from 'node:fs/promises';
 import { basename, dirname, extname, isAbsolute, join, resolve } from 'node:path';
 import { homedir } from 'node:os';
-import { fileURLToPath } from 'node:url';
 import { sheetNames } from './workbook.js';
 import type { Cell, Column, Page } from './types.js';
 
@@ -32,19 +31,22 @@ export class Engine {
         memory_limit: '1GB', threads: '4', max_temp_directory_size: '2GB',
         autoinstall_known_extensions: 'false', autoload_known_extensions: 'false',
         enable_external_access: String(external || excel), allow_community_extensions: 'false',
+        extension_directory: join(this.home, 'extensions'),
       });
       let c: DuckDBConnection | undefined;
       let timer: NodeJS.Timeout | undefined;
       try {
         c = await db.connect();
-                await c.run('CREATE SCHEMA IF NOT EXISTS data; CREATE SCHEMA IF NOT EXISTS results; CREATE SCHEMA IF NOT EXISTS _acts');
+        await c.run('CREATE SCHEMA IF NOT EXISTS data; CREATE SCHEMA IF NOT EXISTS results; CREATE SCHEMA IF NOT EXISTS _acts');
         await c.run('CREATE TABLE IF NOT EXISTS _acts.tables(name VARCHAR PRIMARY KEY, source VARCHAR, sheet VARCHAR, rows BIGINT, notes VARCHAR, created TIMESTAMP DEFAULT current_timestamp)');
         await c.run('CREATE TABLE IF NOT EXISTS _acts.results(id VARCHAR PRIMARY KEY, kind VARCHAR, title VARCHAR, notes VARCHAR, table_name VARCHAR, created TIMESTAMP DEFAULT current_timestamp)');
         await c.run("SET search_path='data,main'; SET preserve_insertion_order=true");
         if (excel) {
-          const platform = (await c.runAndReadAll('PRAGMA platform')).getRowsJson()[0][0];
-          const extension = this.extension || fileURLToPath(new URL(`../dist/extensions/${platform}/excel.duckdb_extension`, import.meta.url));
-          await c.run(`LOAD ${literal(extension)}`);
+          if (this.extension) await c.run(`LOAD ${literal(this.extension)}`);
+          else {
+            await c.run('INSTALL excel FROM core');
+            await c.run('LOAD excel');
+          }
         }
         if (!external && excel) await c.run('SET enable_external_access=false');
         await c.run('SET lock_configuration=true');
@@ -59,6 +61,8 @@ export class Engine {
     this.tail = run.catch(() => undefined);
     return run;
   }
+
+  async setup() { await this.task(false, true, async () => undefined); }
 
   private async transaction<T>(c: DuckDBConnection, work: () => Promise<T>) {
     await c.run('BEGIN');

@@ -3,7 +3,6 @@ import { execFileSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { parseArgs } from 'node:util';
 import { unzipSync } from 'fflate';
-import { targets, archiveLimit } from './targets.mjs';
 
 const { values } = parseArgs({ options: { 'notes-file': { type: 'string' }, prerelease: { type: 'boolean' } } });
 if (!values['notes-file']) throw new Error('Pass --notes-file PATH with release notes and actual platform test coverage');
@@ -19,22 +18,20 @@ const remoteTag = git(['ls-remote', 'origin', `refs/tags/${tag}`, `refs/tags/${t
 if (!remoteTag.some(line => line.split('\t')[0] === commit)) throw new Error(`Push ${tag} to origin before releasing`);
 const assets = [];
 const expected = new Map();
-for (const target of Object.keys(targets)) {
-  for (const suffix of ['-chatgpt.zip', '.mcpb']) {
-    const name = `ACTS-Excel-${pkg.version}-${target}${suffix}`;
-    const path = `release/${name}`;
-    const bytes = await readFile(path);
-    if (bytes.length >= archiveLimit) throw new Error(`${name} exceeds the archive size limit`);
-    const hash = createHash('sha256').update(bytes).digest('hex');
-    const checksum = await readFile(`${path}.sha256`);
-    if (checksum.toString('utf8') !== `${hash}  ${name}\n`) throw new Error(`Checksum mismatch: ${name}`);
-    const files = unzipSync(bytes, { filter: file => file.name === 'dist/build-info.json' });
-    const info = JSON.parse(Buffer.from(files['dist/build-info.json']).toString('utf8'));
-    if (info.source_commit !== commit || info.version !== pkg.version || JSON.stringify(info.targets) !== JSON.stringify([target])) throw new Error(`Stale or mismatched build: ${name}`);
-    assets.push(path, `${path}.sha256`);
-    expected.set(name, { size: bytes.length, digest: `sha256:${hash}` });
-    expected.set(`${name}.sha256`, { size: checksum.length, digest: `sha256:${createHash('sha256').update(checksum).digest('hex')}` });
-  }
+for (const name of [`ACTS-Excel-${pkg.version}-chatgpt.zip`, `${pkg.name}-${pkg.version}.tgz`]) {
+  const path = `release/${name}`;
+  const bytes = await readFile(path);
+  if (bytes.length >= 100_000_000) throw new Error(`${name} exceeds the archive size limit`);
+  const hash = createHash('sha256').update(bytes).digest('hex');
+  const checksum = await readFile(`${path}.sha256`);
+  if (checksum.toString('utf8') !== `${hash}  ${name}\n`) throw new Error(`Checksum mismatch: ${name}`);
+  const info = name.endsWith('.zip')
+    ? JSON.parse(Buffer.from(unzipSync(bytes)['build-info.json']).toString('utf8'))
+    : JSON.parse(execFileSync('tar', ['-xOf', path, 'package/dist/build-info.json'], { encoding: 'utf8' }));
+  if (info.source_commit !== commit || info.version !== pkg.version) throw new Error(`Stale or mismatched build: ${name}`);
+  assets.push(path, `${path}.sha256`);
+  expected.set(name, { size: bytes.length, digest: `sha256:${hash}` });
+  expected.set(`${name}.sha256`, { size: checksum.length, digest: `sha256:${createHash('sha256').update(checksum).digest('hex')}` });
 }
 const gh = args => execFileSync('gh', args, { encoding: 'utf8' });
 gh(['release', 'create', tag, '--repo', repo, '--verify-tag', '--draft', '--title', `ACTS Excel ${pkg.version}`, '--notes-file', values['notes-file'], ...(values.prerelease ? ['--prerelease'] : []), ...assets]);
